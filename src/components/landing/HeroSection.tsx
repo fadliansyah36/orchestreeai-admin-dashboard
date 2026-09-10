@@ -221,9 +221,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ onScrollToSection, onO
                   Central Orchestrator
                 </div>
 
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#08B85C] via-[#16B7D9] to-[#1976E8] flex items-center justify-center text-white shadow-lg shadow-[#08B85C]/30 mb-3 mt-2 animate-bounce">
-                  <Sparkles className="w-8 h-8" />
-                </div>
+                <img
+                  src="/logoorchestreeweb.png"
+                  alt="OrchestreeAI Core"
+                  className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-contain shadow-xl shadow-[#08B85C]/30 mb-3 mt-2 transition-transform hover:scale-105"
+                  referrerPolicy="no-referrer"
+                />
 
                 <h4 className="text-lg font-extrabold text-white">Orchestree.AI OS</h4>
                 <p className="text-xs text-slate-300 mt-1 max-w-xs">

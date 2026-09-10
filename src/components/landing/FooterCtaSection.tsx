@@ -86,9 +86,12 @@ export const FooterCtaSection: React.FC<FooterCtaProps> = ({ onOpenProspectForm 
           {/* Col 1: Brand Info */}
           <div className="col-span-2 space-y-4">
             <div className="flex items-center space-x-3">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#08B85C] via-[#16B7D9] to-[#1976E8] flex items-center justify-center text-white font-bold shadow-lg">
-                <Layers className="w-5 h-5" />
-              </div>
+              <img
+                src="/logoorchestreeweb.png"
+                alt="OrchestreeAI Logo"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-contain shadow-lg shrink-0"
+                referrerPolicy="no-referrer"
+              />
               <div className="flex flex-col">
                 <span className="font-extrabold text-base tracking-tight text-white">
                   Orchestree<span className="text-[#08B85C]">.AI</span>

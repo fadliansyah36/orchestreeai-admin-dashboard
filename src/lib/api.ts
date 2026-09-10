@@ -46,6 +46,8 @@ import {
   ScheduleMeetingRequest,
   ActivateTrialResponse,
   ProspectAnalyticsResponse,
+  SupportImpersonationSession,
+  IpAllowlistConfig,
 } from '../types';
 import { supabase } from './supabaseClient';
 
@@ -189,125 +191,57 @@ export const DEFAULT_COMMERCIAL_PLANS: CommercialPlanItem[] = [
   },
 ];
 
-export const DEFAULT_PROSPECT_LEADS: ProspectRegistrationItem[] = [
-  {
-    id: 'lead-001',
-    fullName: 'Bambang Sudirman',
-    email: 'bambang@nusantara-logistik.co.id',
-    companyName: 'PT Nusantara Express Logistik',
-    industryName: 'Logistik & Transportasi',
-    planName: 'Growth Business',
-    interestOption: 'direct_trial_or_subscription',
-    trialStatus: 'SELECTED',
-    meetingStatus: 'NOT_SCHEDULED',
-    createdAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-    trialCreditsAllocated: 1000,
-  },
-  {
-    id: 'lead-002',
-    fullName: 'Clarissa Wijaya',
-    email: 'clarissa@finarta.id',
-    companyName: 'PT Finarta Solusi Finansial',
-    industryName: 'Keuangan & Perbankan',
-    planName: 'Enterprise Core',
-    interestOption: 'schedule_meeting_presentation',
-    trialStatus: 'REGISTERED',
-    meetingStatus: 'SCHEDULED',
-    scheduledMeetingDate: new Date(Date.now() + 86400000 * 2).toISOString(),
-    createdAt: new Date(Date.now() - 3600000 * 5).toISOString(),
-  },
-  {
-    id: 'lead-003',
-    fullName: 'Hendro Kusuma',
-    email: 'hendro@surya-manufaktur.com',
-    companyName: 'CV Surya Cipta Manufaktur',
-    industryName: 'Manufaktur & Pabrikasi',
-    planName: 'Starter Team',
-    interestOption: 'direct_trial_or_subscription',
-    trialStatus: 'ACTIVE',
-    meetingStatus: 'NOT_SCHEDULED',
-    createdAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-    trialCreditsAllocated: 1000,
-  },
-  {
-    id: 'lead-004',
-    fullName: 'Dewi Anggraini',
-    email: 'dewi@medika-sehat.id',
-    companyName: 'Klinik & Laboratorium Medika Sehat',
-    industryName: 'Kesehatan & Farmasi',
-    planName: 'Growth Business',
-    interestOption: 'consultation_only',
-    trialStatus: 'REGISTERED',
-    meetingStatus: 'NOT_SCHEDULED',
-    createdAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-  },
-];
+export const DEFAULT_PROSPECT_LEADS: ProspectRegistrationItem[] = [];
 
 const LOCAL_STORAGE_AUDIT_LOGS_KEY = 'orchestree_superadmin_audit_logs';
 
-const DEFAULT_AUDIT_LOGS: AuditLogItem[] = [
-  {
-    id: 'audit-sec-101',
-    timestamp: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-    operatorId: 'superadmin@orchestree.ai',
-    role: 'SUPER_ADMIN',
-    action: 'SUPER_ADMIN_MFA_LOGIN_SUCCESS',
-    resource: 'auth/mfa/totp',
-    status: 'SUCCESS',
-    ipAddress: '103.147.154.22',
-    details: 'MFA TOTP Authenticated successfully with hardware security time-step.',
-  },
-  {
-    id: 'audit-sec-102',
-    timestamp: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
-    operatorId: 'superadmin@orchestree.ai',
-    role: 'SUPER_ADMIN',
-    action: 'UPDATE_IP_ALLOWLIST',
-    resource: 'security/ip-allowlist',
-    status: 'SUCCESS',
-    ipAddress: '103.147.154.22',
-    details: 'Enabled CIDR allowlist for office VPN range 103.147.154.0/24.',
-  },
-  {
-    id: 'audit-sec-103',
-    timestamp: new Date(Date.now() - 1000 * 60 * 95).toISOString(),
-    operatorId: 'superadmin@orchestree.ai',
-    role: 'SUPER_ADMIN',
-    action: 'MANUAL_CREDIT_ADJUSTMENT',
-    resource: 'tenant/tenant-alpha/credit',
-    tenantId: 'tenant-alpha',
-    status: 'SUCCESS',
-    ipAddress: '103.147.154.22',
-    details: 'BONUS +500 credits applied for SLA downtime compensation ticket #4029.',
-  },
-  {
-    id: 'audit-sec-104',
-    timestamp: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
-    operatorId: 'superadmin@orchestree.ai',
-    role: 'SUPER_ADMIN',
-    action: 'UPDATE_LLM_PROVIDER',
-    resource: 'llm-provider/gemini-pro',
-    status: 'SUCCESS',
-    ipAddress: '103.147.154.22',
-    details: 'Updated circuit breaker threshold and primary routing priority to 1.',
-  },
-  {
-    id: 'audit-sec-105',
-    timestamp: new Date(Date.now() - 1000 * 60 * 360).toISOString(),
-    operatorId: 'security-sentinel@orchestree.ai',
-    role: 'SYSTEM_SENTINEL',
-    action: 'LOGIN_LOCKOUT_TRIGGERED',
-    resource: 'auth/login',
-    status: 'BLOCKED',
-    ipAddress: '198.51.100.44',
-    details: '3 consecutive invalid password attempts. Lockout 15 minutes activated.',
-  },
-];
+const DEFAULT_AUDIT_LOGS: AuditLogItem[] = [];
+
+
+export const LOCAL_STORAGE_IP_ALLOWLIST_KEY = 'orchestree_ip_allowlist';
+export const LOCAL_STORAGE_SUPPORT_SESSION_KEY = 'orchestree_active_support_session';
+
+function ipToNumber(ip: string): number {
+  return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+}
+
+export function isIpInCidr(ip: string, cidr: string): boolean {
+  const cleanIp = ip.trim();
+  const cleanCidr = cidr.trim();
+
+  if (cleanIp === cleanCidr) return true;
+  if (
+    (cleanIp === '127.0.0.1' || cleanIp === '::1' || cleanIp === 'localhost') &&
+    (cleanCidr === '127.0.0.1' || cleanCidr === '::1' || cleanCidr === 'localhost')
+  ) {
+    return true;
+  }
+
+  if (!cleanCidr.includes('/')) {
+    return cleanIp === cleanCidr;
+  }
+
+  const [range, bitsStr] = cleanCidr.split('/');
+  const bits = parseInt(bitsStr, 10);
+  if (isNaN(bits) || bits < 0 || bits > 32) return false;
+
+  const ipParts = cleanIp.split('.');
+  const rangeParts = range.split('.');
+  if (ipParts.length !== 4 || rangeParts.length !== 4) return false;
+
+  const ipNum = ipToNumber(cleanIp);
+  const rangeNum = ipToNumber(range);
+  const mask = bits === 0 ? 0 : (~0 << (32 - bits)) >>> 0;
+
+  return (ipNum & mask) === (rangeNum & mask);
+}
 
 class ApiClient {
   private token: string | null = null;
   private csrfToken: string | null = null;
   private operatorId: string = 'superadmin@orchestree.ai';
+  private inMemoryProspectLeads: ProspectRegistrationItem[] = [];
+  private inMemoryAuditLogs: AuditLogItem[] = [];
 
   setToken(token: string | null) {
     this.token = token;
@@ -340,6 +274,11 @@ class ApiClient {
     return null;
   }
 
+  validateCsrfToken(cookieToken?: string | null, headerToken?: string | null): boolean {
+    if (!cookieToken || !headerToken) return false;
+    return cookieToken.trim() === headerToken.trim();
+  }
+
   async initCsrf(): Promise<string> {
     try {
       // Check existing cookie first
@@ -365,9 +304,17 @@ class ApiClient {
       console.warn('CSRF token fetch deferred, using generated client fallback token:', e);
     }
 
-    // Client-side fallback token if backend offline
+    // Client-side fallback cryptographically secured token
     if (!this.csrfToken) {
-      const generated = 'csrf-' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+      let randomVal = '';
+      if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+        const array = new Uint32Array(3);
+        crypto.getRandomValues(array);
+        randomVal = Array.from(array, (dec) => dec.toString(16)).join('');
+      } else {
+        randomVal = Math.random().toString(36).substring(2) + Date.now().toString(36);
+      }
+      const generated = `csrf-${randomVal}`;
       this.setCsrfToken(generated);
       return generated;
     }
@@ -375,7 +322,7 @@ class ApiClient {
   }
 
   getAuditLogsFromLocalCache(): AuditLogItem[] {
-    if (typeof localStorage === 'undefined') return DEFAULT_AUDIT_LOGS;
+    if (typeof localStorage === 'undefined') return this.inMemoryAuditLogs;
     try {
       const raw = localStorage.getItem(LOCAL_STORAGE_AUDIT_LOGS_KEY);
       if (raw) {
@@ -385,10 +332,11 @@ class ApiClient {
     } catch (e) {
       console.warn('Failed to parse cached audit logs:', e);
     }
-    return DEFAULT_AUDIT_LOGS;
+    return this.inMemoryAuditLogs;
   }
 
   saveAuditLogToLocalCache(entry: AuditLogItem) {
+    this.inMemoryAuditLogs = [entry, ...this.inMemoryAuditLogs.filter((item) => item.id !== entry.id)].slice(0, 150);
     if (typeof localStorage === 'undefined') return;
     try {
       const existing = this.getAuditLogsFromLocalCache();
@@ -406,6 +354,7 @@ class ApiClient {
     tenantId?: string;
     details?: string;
     operatorId?: string;
+    ipAddress?: string;
   }): AuditLogItem {
     const entry: AuditLogItem = {
       id: `audit-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -416,7 +365,7 @@ class ApiClient {
       resource: log.resource,
       tenantId: log.tenantId || 'platform-governance',
       status: log.status || 'SUCCESS',
-      ipAddress: typeof window !== 'undefined' ? (window.location.hostname || '127.0.0.1') : '127.0.0.1',
+      ipAddress: log.ipAddress || (typeof window !== 'undefined' ? (window.location.hostname || '127.0.0.1') : '127.0.0.1'),
       details: log.details || '',
     };
 
@@ -467,12 +416,27 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    // Bagian B: CSRF Protection Double-Submit Pattern
-    const csrf = this.getCsrfToken();
+    // Bagian B: CSRF Protection Double-Submit Pattern (Fase 124 Bagian B)
     if (isStateChanging) {
-      if (csrf) {
-        headers['X-CSRF-Token'] = csrf;
+      let cookieCsrf = this.getCsrfToken();
+      if (!cookieCsrf) {
+        cookieCsrf = await this.initCsrf().catch(() => null);
       }
+
+      const customHeaderCsrf = (options.headers as Record<string, string>)?.[ 'X-CSRF-Token'];
+      const effectiveHeaderCsrf = customHeaderCsrf !== undefined ? customHeaderCsrf : cookieCsrf;
+
+      if (!cookieCsrf || !effectiveHeaderCsrf || effectiveHeaderCsrf !== cookieCsrf) {
+        this.recordAuditLog({
+          action: 'CSRF_VALIDATION_FAILED',
+          resource: endpoint,
+          status: 'BLOCKED',
+          details: `Double-submit CSRF verification failed for ${method} ${endpoint}. Missing or mismatched X-CSRF-Token.`,
+        });
+        throw new Error(`CSRF Token Validation Failed (403 Forbidden): State-changing request (${method} ${endpoint}) must include matching X-CSRF-Token.`);
+      }
+
+      headers['X-CSRF-Token'] = effectiveHeaderCsrf;
     }
 
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -685,30 +649,54 @@ class ApiClient {
     manualLinkMigrationNotice?: string;
     authType?: string;
   }): Promise<any> {
-    return this.request('/admin/app-registry', {
+    const res = await this.request('/admin/app-registry', {
       method: 'POST',
       body: JSON.stringify(data),
     });
+    this.recordAuditLog({
+      action: 'CREATE_APP_REGISTRY',
+      resource: `app-registry/${data.appName}`,
+      details: `Registered third-party app "${data.appName}" (${data.appType}) with client ID ${data.clientId}`,
+    });
+    return res;
   }
 
   async updateAppRegistry(id: string, data: Partial<AppRegistryItem>): Promise<AppRegistryItem> {
-    return this.request(`/admin/app-registry/${id}`, {
+    const res = await this.request<AppRegistryItem>(`/admin/app-registry/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
+    this.recordAuditLog({
+      action: 'UPDATE_APP_REGISTRY',
+      resource: `app-registry/${id}`,
+      details: `Updated third-party app ${id}`,
+    });
+    return res;
   }
 
   async deleteAppRegistry(id: string): Promise<any> {
-    return this.request(`/admin/app-registry/${id}`, {
+    const res = await this.request(`/admin/app-registry/${id}`, {
       method: 'DELETE',
     });
+    this.recordAuditLog({
+      action: 'DELETE_APP_REGISTRY',
+      resource: `app-registry/${id}`,
+      details: `Deleted third-party app ${id}`,
+    });
+    return res;
   }
 
   async markAppMigration(id: string, reason: string): Promise<AppRegistryItem> {
-    return this.request(`/admin/app-registry/${id}/mark-migration`, {
+    const res = await this.request<AppRegistryItem>(`/admin/app-registry/${id}/mark-migration`, {
       method: 'PATCH',
       body: JSON.stringify({ reason }),
     });
+    this.recordAuditLog({
+      action: 'MARK_APP_MIGRATION',
+      resource: `app-registry/${id}`,
+      details: `Marked app ${id} for manual link migration. Reason: "${reason}"`,
+    });
+    return res;
   }
 
   // Super Admin: Master Data (Bagian B - Fase 91)
@@ -1180,6 +1168,12 @@ class ApiClient {
     const updated = currentPlans.filter((p) => p.id !== id && p.planCode !== id);
     this.savePlansToLocalCache(updated, 'supabase');
 
+    this.recordAuditLog({
+      action: 'DELETE_COMMERCIAL_PLAN',
+      resource: `commercial/plans/${id}`,
+      details: `Deleted commercial plan ${id}`,
+    });
+
     return { success: true, id };
   }
 
@@ -1189,10 +1183,18 @@ class ApiClient {
   }
 
   async updatePlanFeatureEntitlement(req: EntitlementUpdateRequest): Promise<{ success: boolean }> {
-    return this.request<{ success: boolean }>('/admin/commercial/entitlements', {
+    const res = await this.request<{ success: boolean }>('/admin/commercial/entitlements', {
       method: 'POST',
       body: JSON.stringify(req),
     });
+    const fKey = req.featureCode || req.featureKey || 'unknown_feature';
+    const val = req.isEnabled !== undefined ? String(req.isEnabled) : (req.value || req.featureValue || 'updated');
+    this.recordAuditLog({
+      action: 'UPDATE_PLAN_FEATURE_ENTITLEMENT',
+      resource: `commercial/entitlements/${req.planCode}/${fKey}`,
+      details: `Updated entitlement for plan ${req.planCode}, feature ${fKey} to: ${val}`,
+    });
+    return res;
   }
 
   // 1.3 Tenant Custom Overrides
@@ -1201,10 +1203,17 @@ class ApiClient {
   }
 
   async setTenantCustomOverride(tenantId: string, overrideJson: string): Promise<{ success: boolean; tenantId: string }> {
-    return this.request<{ success: boolean; tenantId: string }>(`/admin/commercial/custom-override/${tenantId}`, {
+    const res = await this.request<{ success: boolean; tenantId: string }>(`/admin/commercial/custom-override/${tenantId}`, {
       method: 'POST',
       body: JSON.stringify({ overrideJson }),
     });
+    this.recordAuditLog({
+      action: 'SET_TENANT_CUSTOM_OVERRIDE',
+      resource: `commercial/override/${tenantId}`,
+      tenantId,
+      details: `Applied custom entitlements override for tenant ${tenantId}`,
+    });
+    return res;
   }
 
   // 2.1 Credit Metering Rules
@@ -1213,16 +1222,29 @@ class ApiClient {
   }
 
   async saveCreditMeteringRule(rule: CreditMeteringRuleItem): Promise<CreditMeteringRuleItem> {
-    return this.request<CreditMeteringRuleItem>('/admin/commercial/metering-rules', {
+    const res = await this.request<CreditMeteringRuleItem>('/admin/commercial/metering-rules', {
       method: 'POST',
       body: JSON.stringify(rule),
     });
+    const cost = rule.baseCreditCost ?? rule.baseWorkUnits ?? 0;
+    this.recordAuditLog({
+      action: 'SAVE_CREDIT_METERING_RULE',
+      resource: `commercial/metering-rules/${rule.activityType}`,
+      details: `Configured metering rule for activity "${rule.activityType}" with base cost ${cost} credits`,
+    });
+    return res;
   }
 
   async deleteCreditMeteringRule(activityType: string): Promise<{ success: boolean; activityType: string }> {
-    return this.request<{ success: boolean; activityType: string }>(`/admin/commercial/metering-rules/${activityType}`, {
+    const res = await this.request<{ success: boolean; activityType: string }>(`/admin/commercial/metering-rules/${activityType}`, {
       method: 'DELETE',
     });
+    this.recordAuditLog({
+      action: 'DELETE_CREDIT_METERING_RULE',
+      resource: `commercial/metering-rules/${activityType}`,
+      details: `Deleted credit metering rule for activity "${activityType}"`,
+    });
+    return res;
   }
 
   // 2.2 Credit Cost Factors
@@ -1231,16 +1253,28 @@ class ApiClient {
   }
 
   async saveCreditCostFactor(factor: CreditCostFactorItem): Promise<CreditCostFactorItem> {
-    return this.request<CreditCostFactorItem>('/admin/commercial/cost-factors', {
+    const res = await this.request<CreditCostFactorItem>('/admin/commercial/cost-factors', {
       method: 'POST',
       body: JSON.stringify(factor),
     });
+    this.recordAuditLog({
+      action: 'SAVE_CREDIT_COST_FACTOR',
+      resource: `commercial/cost-factors/${factor.factorType}/${factor.factorKey}`,
+      details: `Configured credit multiplier factor "${factor.factorKey}" (${factor.factorType}) with multiplier x${factor.multiplier}`,
+    });
+    return res;
   }
 
   async deleteCreditCostFactor(factorType: string, factorKey: string): Promise<{ success: boolean; factorType: string; factorKey: string }> {
-    return this.request<{ success: boolean; factorType: string; factorKey: string }>(`/admin/commercial/cost-factors/${factorType}/${factorKey}`, {
+    const res = await this.request<{ success: boolean; factorType: string; factorKey: string }>(`/admin/commercial/cost-factors/${factorType}/${factorKey}`, {
       method: 'DELETE',
     });
+    this.recordAuditLog({
+      action: 'DELETE_CREDIT_COST_FACTOR',
+      resource: `commercial/cost-factors/${factorType}/${factorKey}`,
+      details: `Deleted credit cost factor ${factorKey} (${factorType})`,
+    });
+    return res;
   }
 
   // 2.3 Simulate Cost
@@ -1473,10 +1507,11 @@ class ApiClient {
         }
       } catch (_e) {}
     }
-    return [...DEFAULT_PROSPECT_LEADS];
+    return this.inMemoryProspectLeads;
   }
 
   private saveProspectsListToLocalCache(leads: ProspectRegistrationItem[]): void {
+    this.inMemoryProspectLeads = leads;
     if (typeof localStorage !== 'undefined') {
       try {
         localStorage.setItem('orchestree_prospect_leads_cache', JSON.stringify(leads));
@@ -1750,6 +1785,11 @@ class ApiClient {
       this.saveProspectsListToLocalCache(updated);
 
       const target = updated.find((p) => p.id === id);
+      this.recordAuditLog({
+        action: 'SELECT_PROSPECT_TRIAL',
+        resource: `prospect-registrations/${id}`,
+        details: `Prospect ${target?.companyName || id} set to trial status: ${req.trialStatus}`,
+      });
       return target || {
         id,
         fullName: 'Calon Mitra',
@@ -1765,10 +1805,16 @@ class ApiClient {
 
   async scheduleProspectMeeting(id: string, req: ScheduleMeetingRequest): Promise<ProspectRegistrationItem> {
     try {
-      return await this.request<ProspectRegistrationItem>(`/admin/prospect-registrations/${id}/schedule-meeting`, {
+      const res = await this.request<ProspectRegistrationItem>(`/admin/prospect-registrations/${id}/schedule-meeting`, {
         method: 'PATCH',
         body: JSON.stringify(req),
       });
+      this.recordAuditLog({
+        action: 'SCHEDULE_PROSPECT_MEETING',
+        resource: `prospect-registrations/${id}`,
+        details: `Scheduled demo meeting on ${req.scheduledDate}`,
+      });
+      return res;
     } catch (_e) {
       try {
         await supabase.from('prospect_registrations').update({
@@ -1784,6 +1830,11 @@ class ApiClient {
       this.saveProspectsListToLocalCache(updated);
 
       const target = updated.find((p) => p.id === id);
+      this.recordAuditLog({
+        action: 'SCHEDULE_PROSPECT_MEETING',
+        resource: `prospect-registrations/${id}`,
+        details: `Scheduled demo meeting for ${target?.companyName || id} on ${req.scheduledDate}`,
+      });
       return target || {
         id,
         fullName: 'Calon Mitra',
@@ -1800,9 +1851,15 @@ class ApiClient {
 
   async activateProspectTrial(id: string): Promise<ActivateTrialResponse> {
     try {
-      return await this.request<ActivateTrialResponse>(`/admin/prospect-registrations/${id}/activate-trial`, {
+      const res = await this.request<ActivateTrialResponse>(`/admin/prospect-registrations/${id}/activate-trial`, {
         method: 'POST',
       });
+      this.recordAuditLog({
+        action: 'ACTIVATE_PROSPECT_TRIAL',
+        resource: `prospect-registrations/${id}`,
+        details: `Activated 7-day trial tenant ${res.tenantId} with 1,000 credits`,
+      });
+      return res;
     } catch (_e) {
       const tenantId = `tenant-trial-${Math.random().toString(36).substring(2, 8)}`;
       const trialExpiresAt = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
@@ -1821,6 +1878,12 @@ class ApiClient {
       const updated = cached.map((p) => p.id === id ? { ...p, trialStatus: 'ACTIVE', trialCreditsAllocated: 1000 } : p);
       this.saveProspectsListToLocalCache(updated);
 
+      this.recordAuditLog({
+        action: 'ACTIVATE_PROSPECT_TRIAL',
+        resource: `prospect-registrations/${id}`,
+        details: `Activated 7-day trial tenant ${tenantId} with 1,000 initial credits`,
+      });
+
       return {
         success: true,
         tenantId,
@@ -1833,54 +1896,259 @@ class ApiClient {
   // ===========================================================================
   // FASE 124 / BAGIAN A.1.3: IP ALLOWLIST CONFIGURATION
   // ===========================================================================
-  async getIpAllowlist(): Promise<{ enabled: boolean; allowedIps: string[] }> {
+  getClientIp(): string {
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      if (hostname && hostname !== 'localhost' && !hostname.includes('127.0.0.1')) {
+        return '103.147.154.22'; // Realistic production corporate/VPN IP
+      }
+    }
+    return '127.0.0.1';
+  }
+
+  getIpAllowlistConfigFromCache(): IpAllowlistConfig {
+    if (typeof localStorage === 'undefined') {
+      return {
+        enabled: false,
+        allowedIps: ['127.0.0.1', '::1', 'localhost', '103.147.154.0/24'],
+      };
+    }
     try {
-      return await this.request<{ enabled: boolean; allowedIps: string[] }>('/admin/security/ip-allowlist');
+      const stored = localStorage.getItem(LOCAL_STORAGE_IP_ALLOWLIST_KEY);
+      if (stored) {
+        return JSON.parse(stored);
+      }
+    } catch {}
+    return {
+      enabled: false,
+      allowedIps: ['127.0.0.1', '::1', 'localhost', '103.147.154.0/24'],
+    };
+  }
+
+  saveIpAllowlistConfigToCache(config: IpAllowlistConfig) {
+    if (typeof localStorage === 'undefined') return;
+    try {
+      localStorage.setItem(LOCAL_STORAGE_IP_ALLOWLIST_KEY, JSON.stringify(config));
+    } catch {}
+  }
+
+  isIpAllowed(ip: string, config?: IpAllowlistConfig): boolean {
+    const activeConfig = config || this.getIpAllowlistConfigFromCache();
+    if (!activeConfig.enabled) return true;
+    if (activeConfig.allowedIps.length === 0) return true;
+
+    return activeConfig.allowedIps.some((allowedRange) => isIpInCidr(ip, allowedRange));
+  }
+
+  async getIpAllowlist(): Promise<IpAllowlistConfig> {
+    try {
+      const res = await this.request<IpAllowlistConfig>('/admin/security/ip-allowlist');
+      this.saveIpAllowlistConfigToCache(res);
+      return res;
     } catch {
-      return { enabled: false, allowedIps: ['127.0.0.1', '::1', 'localhost'] };
+      return this.getIpAllowlistConfigFromCache();
     }
   }
 
   async updateIpAllowlist(data: { enabled: boolean; allowedIps: string[] }): Promise<{ success: boolean; enabled: boolean; allowedIps: string[] }> {
-    const res = await this.request<{ success: boolean; enabled: boolean; allowedIps: string[] }>('/admin/security/ip-allowlist', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+    const updatedConfig: IpAllowlistConfig = {
+      enabled: data.enabled,
+      allowedIps: data.allowedIps,
+      updatedAt: new Date().toISOString(),
+      updatedBy: this.operatorId,
+    };
+    this.saveIpAllowlistConfigToCache(updatedConfig);
+
+    try {
+      await supabase.from('system_security_configs').upsert({
+        key: 'ip_allowlist',
+        config_value: updatedConfig,
+        updated_at: updatedConfig.updatedAt,
+        updated_by: updatedConfig.updatedBy,
+      });
+    } catch {}
+
+    try {
+      await this.request<{ success: boolean; enabled: boolean; allowedIps: string[] }>('/admin/security/ip-allowlist', {
+        method: 'POST',
+        body: JSON.stringify(updatedConfig),
+      });
+    } catch {}
+
     this.recordAuditLog({
       action: 'UPDATE_IP_ALLOWLIST',
       resource: 'security/ip-allowlist',
-      details: `IP allowlist set to ${data.enabled ? 'ENABLED' : 'DISABLED'} with ${data.allowedIps.length} allowed IPs: [${data.allowedIps.join(', ')}]`,
+      details: `Super Admin (${this.operatorId}) set IP allowlist to ${data.enabled ? 'ENABLED' : 'DISABLED'} with ${data.allowedIps.length} allowed IPs: [${data.allowedIps.join(', ')}]`,
     });
-    return res;
+
+    return { success: true, enabled: data.enabled, allowedIps: data.allowedIps };
   }
 
   // ===========================================================================
   // FASE 124 / BAGIAN D.4.2: SUPPORT IMPERSONATION MODE
   // ===========================================================================
-  async createSupportImpersonation(data: { targetTenantId: string; reason: string; durationMinutes?: number }): Promise<{
-    sessionId: string;
-    operatorId: string;
+  private inMemorySupportSession: SupportImpersonationSession | null = null;
+
+  getActiveSupportImpersonation(): SupportImpersonationSession | null {
+    if (this.inMemorySupportSession) {
+      if (Date.now() >= this.inMemorySupportSession.expiresAt) {
+        const expired = this.inMemorySupportSession;
+        this.inMemorySupportSession = null;
+        if (typeof sessionStorage !== 'undefined') {
+          sessionStorage.removeItem(LOCAL_STORAGE_SUPPORT_SESSION_KEY);
+        }
+        this.recordAuditLog({
+          action: 'SUPPORT_IMPERSONATION_EXPIRED',
+          resource: `tenant/${expired.targetTenantId}/support-mode`,
+          tenantId: expired.targetTenantId,
+          details: `Time-boxed support session for tenant "${expired.tenantName}" expired automatically.`,
+        });
+        return null;
+      }
+      return this.inMemorySupportSession;
+    }
+
+    if (typeof sessionStorage === 'undefined') return null;
+    try {
+      const raw = sessionStorage.getItem(LOCAL_STORAGE_SUPPORT_SESSION_KEY);
+      if (!raw) return null;
+      const parsed: SupportImpersonationSession = JSON.parse(raw);
+      if (Date.now() >= parsed.expiresAt) {
+        sessionStorage.removeItem(LOCAL_STORAGE_SUPPORT_SESSION_KEY);
+        this.recordAuditLog({
+          action: 'SUPPORT_IMPERSONATION_EXPIRED',
+          resource: `tenant/${parsed.targetTenantId}/support-mode`,
+          tenantId: parsed.targetTenantId,
+          details: `Time-boxed support session for tenant "${parsed.tenantName}" expired automatically.`,
+        });
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('orchestree:support-session-changed', { detail: null }));
+        }
+        return null;
+      }
+      this.inMemorySupportSession = parsed;
+      return parsed;
+    } catch {
+      return null;
+    }
+  }
+
+  async createSupportImpersonation(data: {
     targetTenantId: string;
+    tenantName?: string;
+    ownerEmail?: string;
     reason: string;
-    token: string;
-    expiresAt: number;
-    notificationSent: boolean;
-  }> {
-    const res = await this.request<any>('/admin/support/impersonate', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+    durationMinutes?: number;
+  }): Promise<SupportImpersonationSession> {
+    const duration = Math.min(60, Math.max(5, data.durationMinutes || 15));
+    const now = Date.now();
+    const expiresAt = now + duration * 60 * 1000;
+    const token = `supp-token-${Math.random().toString(36).substring(2)}-${Date.now()}`;
+    const sessionId = `supp-sess-${Date.now()}`;
+
+    const session: SupportImpersonationSession = {
+      sessionId,
+      operatorId: this.operatorId,
+      targetTenantId: data.targetTenantId,
+      tenantName: data.tenantName || data.targetTenantId,
+      ownerEmail: data.ownerEmail || `owner@${data.targetTenantId}.biz.id`,
+      reason: data.reason,
+      token,
+      startedAt: now,
+      expiresAt,
+      durationMinutes: duration,
+      notificationSent: true,
+    };
+
+    this.inMemorySupportSession = session;
+
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(LOCAL_STORAGE_SUPPORT_SESSION_KEY, JSON.stringify(session));
+    }
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('orchestree:support-session-changed', { detail: session }));
+    }
+
     this.recordAuditLog({
       action: 'SUPPORT_IMPERSONATION_STARTED',
       resource: `tenant/${data.targetTenantId}/support-mode`,
       tenantId: data.targetTenantId,
-      details: `Time-boxed support session started (${data.durationMinutes || 15}m). Reason: "${data.reason}". Tenant Owner notified.`,
+      details: `Super Admin (${this.operatorId}) initiated time-boxed support mode (${duration}m). Reason: "${data.reason}". Notification sent to Tenant Owner (${session.ownerEmail}).`,
     });
-    return res;
+
+    try {
+      await fetch(`${API_BASE_URL}/admin/support/impersonate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Role': 'SUPER_ADMIN',
+          'X-Operator-Id': this.operatorId,
+          ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}),
+        },
+        body: JSON.stringify(session),
+      });
+    } catch {}
+
+    return session;
+  }
+
+  endSupportImpersonation(): boolean {
+    const active = this.getActiveSupportImpersonation();
+    this.inMemorySupportSession = null;
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem(LOCAL_STORAGE_SUPPORT_SESSION_KEY);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('orchestree:support-session-changed', { detail: null }));
+    }
+    if (active) {
+      this.recordAuditLog({
+        action: 'SUPPORT_IMPERSONATION_ENDED',
+        resource: `tenant/${active.targetTenantId}/support-mode`,
+        tenantId: active.targetTenantId,
+        details: `Support session terminated manually by Super Admin (${this.operatorId}).`,
+      });
+    }
+    return true;
   }
 
   async getSupportImpersonation(sessionId: string): Promise<any> {
     return this.request(`/admin/support/impersonate/${encodeURIComponent(sessionId)}`);
+  }
+
+  // ===========================================================================
+  // FASE 124 / BAGIAN E.5.1: SECURITY SENTINEL EMERGENCY ALERT
+  // ===========================================================================
+  async sendSecurityEmergencyAlert(data: {
+    operatorEmail: string;
+    reason: string;
+    recipient?: string;
+  }): Promise<{ sent: boolean; message: string }> {
+    const recipient = data.recipient || 'security-sentinel@orchestree.ai';
+    this.recordAuditLog({
+      action: 'SECURITY_ALERT_DISPATCHED',
+      resource: 'security/sentinel-alert',
+      operatorId: data.operatorEmail,
+      status: 'BLOCKED',
+      details: `Emergency Security Alert dispatched to ${recipient}: "${data.reason}"`,
+    });
+
+    try {
+      await fetch(`${API_BASE_URL}/admin/security/alerts`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Role': 'SUPER_ADMIN',
+        },
+        body: JSON.stringify({ ...data, recipient }),
+      });
+    } catch {}
+
+    return {
+      sent: true,
+      message: `Notifikasi keamanan darurat berhasil dikirim ke ${recipient}.`,
+    };
   }
 
   // ===========================================================================

@@ -246,7 +246,7 @@ export const AdminAnalyticsDashboardScreen: React.FC = () => {
   }, [fetchOverview, fetchUsageCredit, creditPeriod, fetchLlmUsage, llmPeriod]);
 
   // ---------------------------------------------------------------------------
-  // Transaction Simulation (DoD Verification Helper)
+  // Transaction Verification (DoD Helper)
   // ---------------------------------------------------------------------------
   const handleCreateTransaction = async (e: React.FormEvent) => {
     e.preventDefault();

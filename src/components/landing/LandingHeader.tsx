@@ -21,11 +21,14 @@ export const LandingHeader: React.FC<LandingHeaderProps> = ({ onScrollToSection,
         <div className="flex items-center space-x-3">
           <button
             onClick={() => handleNavClick('hero')}
-            className="flex items-center space-x-3 text-left group focus:outline-none"
+            className="flex items-center space-x-3 text-left group focus:outline-none cursor-pointer"
           >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#08B85C] via-[#16B7D9] to-[#1976E8] flex items-center justify-center text-white shadow-lg shadow-[#08B85C]/20 group-hover:scale-105 transition-transform">
-              <Sparkles className="w-5 h-5 text-white" />
-            </div>
+            <img
+              src="/logoorchestreeweb.png"
+              alt="OrchestreeAI Logo"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-contain shadow-md shadow-[#08B85C]/20 group-hover:scale-105 transition-transform shrink-0"
+              referrerPolicy="no-referrer"
+            />
             <div>
               <div className="flex items-center space-x-2">
                 <span className="font-extrabold text-lg tracking-tight text-white">

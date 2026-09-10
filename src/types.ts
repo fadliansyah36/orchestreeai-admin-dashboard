@@ -486,9 +486,11 @@ export interface PlanFeatureEntitlementsMatrix {
 
 export interface EntitlementUpdateRequest {
   planCode: string;
-  featureKey: string;
+  featureKey?: string;
   featureValue?: string;
   value?: string;
+  featureCode?: string;
+  isEnabled?: boolean;
 }
 
 export interface TenantCustomOverrideResponse {
@@ -502,7 +504,8 @@ export interface TenantCustomOverrideResponse {
 export interface CreditMeteringRuleItem {
   id?: string;
   activityType: string;
-  baseWorkUnits: number;
+  baseWorkUnits?: number;
+  baseCreditCost?: number;
   description?: string;
   isActive?: boolean;
 }
@@ -679,3 +682,26 @@ export interface ProspectAnalyticsResponse {
   scheduledDemos: number;
   conversionRate: number;
 }
+
+// Fase 124 Security & Impersonation Types
+export interface SupportImpersonationSession {
+  sessionId: string;
+  operatorId: string;
+  targetTenantId: string;
+  tenantName: string;
+  ownerEmail: string;
+  reason: string;
+  token: string;
+  startedAt: number;
+  expiresAt: number;
+  durationMinutes: number;
+  notificationSent: boolean;
+}
+
+export interface IpAllowlistConfig {
+  enabled: boolean;
+  allowedIps: string[];
+  updatedAt?: string;
+  updatedBy?: string;
+}
+

@@ -11,7 +11,6 @@ import {
   ShieldCheck,
   Activity,
   LogOut,
-  Sparkles,
   AlertOctagon,
   CreditCard,
   Sliders,
@@ -77,9 +76,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ currentScreen, onNav
     <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col h-screen shrink-0">
       {/* Brand Header */}
       <div className="p-5 border-b border-slate-800/80 flex items-center space-x-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center shadow-md shadow-emerald-950/50">
-          <Sparkles className="w-5 h-5 text-white" />
-        </div>
+        <img
+          src="/logoorchestreeweb.png"
+          alt="OrchestreeAI Logo"
+          className="w-10 h-10 rounded-xl object-contain shadow-md shadow-emerald-950/50 shrink-0"
+          referrerPolicy="no-referrer"
+        />
         <div>
           <h1 className="font-bold text-white text-base leading-tight tracking-tight">OrchestreeAI</h1>
           <span className="text-[10px] font-semibold uppercase tracking-wider text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-800/60">

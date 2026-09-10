@@ -53,6 +53,14 @@ describe('Super Admin Security & Auth Compliance Audit', () => {
   });
 
   it('provides resilient prospect registrations and analytics with 0 Failed to fetch errors', async () => {
+    // Register real lead to test the end-to-end registration flow
+    await api.submitProspectRegistration({
+      fullName: 'Bambang Sudirman',
+      email: 'bambang@nusantara-logistik.co.id',
+      companyName: 'PT Nusantara Express Logistik',
+      interestOption: 'direct_trial_or_subscription',
+    });
+
     const prospects = await api.getProspectRegistrations();
     expect(Array.isArray(prospects)).toBe(true);
     expect(prospects.length).toBeGreaterThanOrEqual(1);
@@ -73,6 +81,71 @@ describe('Super Admin Security & Auth Compliance Audit', () => {
 
     expect(isSessionExpired(activeActivity)).toBe(false);
     expect(isSessionExpired(expiredActivity)).toBe(true);
+  });
+
+  it('enforces Phase 124 IP Allowlist with CIDR subnet matching', () => {
+    const config = {
+      enabled: true,
+      allowedIps: ['127.0.0.1', '10.200.0.0/16', '203.0.113.50'],
+    };
+
+    expect(api.isIpAllowed('127.0.0.1', config)).toBe(true);
+    expect(api.isIpAllowed('203.0.113.50', config)).toBe(true);
+    expect(api.isIpAllowed('10.200.1.45', config)).toBe(true);
+    expect(api.isIpAllowed('10.200.255.254', config)).toBe(true);
+    expect(api.isIpAllowed('10.201.0.1', config)).toBe(false);
+    expect(api.isIpAllowed('198.51.100.1', config)).toBe(false);
+
+    // When disabled, all IPs are permitted
+    const disabledConfig = { enabled: false, allowedIps: ['127.0.0.1'] };
+    expect(api.isIpAllowed('198.51.100.1', disabledConfig)).toBe(true);
+  });
+
+  it('validates double-submit CSRF token matching pattern', () => {
+    const testToken = 'csrf_token_test_secure_99182312';
+    expect(api.validateCsrfToken(testToken, testToken)).toBe(true);
+    expect(api.validateCsrfToken(testToken, 'mismatched_token')).toBe(false);
+    expect(api.validateCsrfToken(testToken, null)).toBe(false);
+    expect(api.validateCsrfToken(testToken, undefined)).toBe(false);
+    expect(api.validateCsrfToken('', '')).toBe(false);
+  });
+
+  it('manages time-boxed Support Impersonation sessions (Fase 124 Bagian D.4.2)', async () => {
+    const session = await api.createSupportImpersonation({
+      targetTenantId: 'tenant-test-corp',
+      tenantName: 'Test Corp',
+      ownerEmail: 'owner@testcorp.com',
+      reason: 'Troubleshooting memory sync',
+      durationMinutes: 15,
+    });
+
+    expect(session).toBeDefined();
+    expect(session.targetTenantId).toBe('tenant-test-corp');
+    expect(session.token).toMatch(/^supp[-_]/);
+    expect(session.expiresAt).toBeGreaterThan(Date.now());
+
+    const active = api.getActiveSupportImpersonation();
+    expect(active?.targetTenantId).toBe('tenant-test-corp');
+
+    api.endSupportImpersonation();
+    expect(api.getActiveSupportImpersonation()).toBeNull();
+  });
+
+  it('records comprehensive security audit entries into Audit Ledger', () => {
+    const log = api.recordAuditLog({
+      action: 'TEST_SECURITY_ACTION',
+      resource: 'admin/security/test',
+      status: 'SUCCESS',
+      details: 'Audit test execution',
+    });
+
+    expect(log).toBeDefined();
+    expect(log.id).toBeDefined();
+    expect(log.role).toBe('SUPER_ADMIN');
+    expect(log.action).toBe('TEST_SECURITY_ACTION');
+    expect(log.resource).toBe('admin/security/test');
+    expect(log.status).toBe('SUCCESS');
+    expect(log.timestamp).toBeDefined();
   });
 });
 

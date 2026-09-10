@@ -157,6 +157,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
         }
 
+        // IP Allowlist Check (Fase 124 Bagian A.1.3)
+        const ipConfig = api.getIpAllowlistConfigFromCache();
+        const clientIp = api.getClientIp();
+        if (ipConfig.enabled && !api.isIpAllowed(clientIp, ipConfig)) {
+          await logout(`Akses dibatasi: Alamat IP Anda (${clientIp}) tidak terdaftar dalam IP Allowlist Super Admin.`);
+          setIsLoading(false);
+          return;
+        }
+
         // Verify genuine Supabase session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
@@ -256,6 +265,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       if (!email.trim() || !email.includes('@') || !pass.trim()) {
         throw new Error('Email dan kata sandi wajib diisi.');
+      }
+
+      // IP Allowlist Check (Fase 124 Bagian A.1.3)
+      const ipConfig = api.getIpAllowlistConfigFromCache();
+      const clientIp = api.getClientIp();
+      if (ipConfig.enabled && !api.isIpAllowed(clientIp, ipConfig)) {
+        api.recordAuditLog({
+          action: 'IP_ALLOWLIST_BLOCKED',
+          resource: 'auth/login',
+          operatorId: email.trim(),
+          status: 'BLOCKED',
+          ipAddress: clientIp,
+          details: `Login ditolak: IP ${clientIp} tidak terdaftar dalam IP Allowlist Super Admin.`,
+        });
+        const ipErr = `Akses ditolak: IP address Anda (${clientIp}) tidak berada dalam daftar IP yang diizinkan (IP Allowlist). Hubungi Security Sentinel.`;
+        setError(ipErr);
+        throw new Error(ipErr);
       }
 
       await api.initCsrf().catch(() => {});
@@ -483,21 +509,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           sessionToken = backendRes.accessToken;
           superAdminUser = backendRes.user;
         } catch (beErr: any) {
-          // If backend verification failed with incorrect code or lockout, propagate error!
-          if (tempCredentials.preAuthUser && tempCredentials.preAuthToken) {
-            // Verify code format (fallback verification if backend endpoint is unavailable)
-            sessionToken = tempCredentials.preAuthToken;
-            superAdminUser = tempCredentials.preAuthUser;
-          } else {
-            throw new Error(beErr.message || 'Kode verifikasi MFA TOTP tidak valid.');
-          }
+          throw new Error(beErr.message || 'Kode verifikasi MFA TOTP tidak valid.');
         }
-      }
-
-      // If pre-authenticated credentials exist and code is valid 6 digits
-      if (!sessionToken && tempCredentials.preAuthToken && tempCredentials.preAuthUser) {
-        sessionToken = tempCredentials.preAuthToken;
-        superAdminUser = tempCredentials.preAuthUser;
       }
 
       // If no valid session token could be authenticated, STRICT REJECTION!

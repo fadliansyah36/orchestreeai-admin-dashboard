@@ -16,7 +16,6 @@ import {
   X,
   CheckCircle2,
   AlertCircle,
-  SlidersHorizontal,
 } from 'lucide-react';
 import { api, PricingSyncMetadata, DEFAULT_COMMERCIAL_PLANS } from '../../lib/api';
 import { supabase } from '../../lib/supabaseClient';
@@ -36,11 +35,6 @@ export const PricingSection: React.FC<PricingSectionProps> = ({ onSelectPlan }) 
   const [syncNotification, setSyncNotification] = useState<string | null>(null);
   const [isRealtimeActive, setIsRealtimeActive] = useState<boolean>(true);
   const [showDiagnosticModal, setShowDiagnosticModal] = useState<boolean>(false);
-
-  // Simulation state for testing live backend & supabase price updates
-  const [simStarterPrice, setSimStarterPrice] = useState<number>(550000);
-  const [simGrowthPrice, setSimGrowthPrice] = useState<number>(2750000);
-  const [simSuccessMsg, setSimSuccessMsg] = useState<string | null>(null);
 
   const fetchPricing = async (showNotification = false) => {
     try {
@@ -161,26 +155,6 @@ export const PricingSection: React.FC<PricingSectionProps> = ({ onSelectPlan }) 
 
   const handleManualSync = () => {
     fetchPricing(true);
-  };
-
-  const handleSimulatePriceUpdate = async () => {
-    try {
-      setIsSyncing(true);
-      await api.syncCommercialPlansFromSource({
-        starter: simStarterPrice,
-        growth: simGrowthPrice,
-      });
-      setSimSuccessMsg(`Berhasil memperbarui harga di Backend Server & Supabase Database! Starter: Rp ${simStarterPrice.toLocaleString('id-ID')}, Growth: Rp ${simGrowthPrice.toLocaleString('id-ID')}`);
-      fetchPricing(true);
-      setTimeout(() => {
-        setSimSuccessMsg(null);
-        setShowDiagnosticModal(false);
-      }, 2000);
-    } catch (e: any) {
-      alert('Gagal mensimulasikan update: ' + e.message);
-    } finally {
-      setIsSyncing(false);
-    }
   };
 
   const handleConsultation = (planName: string) => {
@@ -508,51 +482,24 @@ export const PricingSection: React.FC<PricingSectionProps> = ({ onSelectPlan }) 
               </div>
             </div>
 
-            {/* Price Simulation for demonstration */}
+            {/* Realtime Sync Action */}
             <div className="bg-white/5 p-4 rounded-2xl border border-white/10 space-y-3">
               <div className="flex items-center space-x-2 text-xs font-semibold text-slate-200">
-                <SlidersHorizontal className="w-4 h-4 text-emerald-400" />
-                <span>Uji Simulasi Update Harga Backend & Supabase</span>
+                <RefreshCw className={`w-4 h-4 text-emerald-400 ${isSyncing ? 'animate-spin' : ''}`} />
+                <span>Sinkronisasi Data Realtime Backend & Supabase</span>
               </div>
               <p className="text-[11px] text-slate-400">
-                Ubah harga di bawah ini lalu klik tombol terapkan untuk melihat pembaruan harga langsung tercermin di kartu landing page secara real-time:
+                Data harga, kuota kredit, seat limit, dan entitas paket diambil langsung dari Backend Server NEXT_PUBLIC_BACKEND_API_URL dan Supabase PostgreSQL Logical Replication.
               </p>
-
-              <div className="grid grid-cols-2 gap-3 pt-1">
-                <div>
-                  <label className="text-[10px] text-slate-400 block mb-1">Harga Starter Team (IDR)</label>
-                  <input
-                    type="number"
-                    value={simStarterPrice}
-                    onChange={(e) => setSimStarterPrice(Number(e.target.value))}
-                    step="10000"
-                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] text-slate-400 block mb-1">Harga Growth Business (IDR)</label>
-                  <input
-                    type="number"
-                    value={simGrowthPrice}
-                    onChange={(e) => setSimGrowthPrice(Number(e.target.value))}
-                    step="50000"
-                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-xs font-mono text-white focus:outline-none focus:border-emerald-500"
-                  />
-                </div>
-              </div>
-
-              {simSuccessMsg && (
-                <p className="text-xs text-emerald-400 font-medium animate-fadeIn">{simSuccessMsg}</p>
-              )}
 
               <div className="flex items-center space-x-2 pt-2">
                 <button
-                  onClick={handleSimulatePriceUpdate}
+                  onClick={() => handleManualSync()}
                   disabled={isSyncing}
                   className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-semibold text-xs transition-all cursor-pointer flex items-center justify-center space-x-1.5"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
-                  <span>Terapkan Pembaruan ke Backend & Supabase</span>
+                  <span>Sinkronkan Sekarang dari Backend Server & Supabase</span>
                 </button>
               </div>
             </div>

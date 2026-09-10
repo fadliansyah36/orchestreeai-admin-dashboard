@@ -89,11 +89,11 @@ export const CreditMeteringConfigurationScreen: React.FC = () => {
         </div>
       )}
 
-      {/* Simulator Section */}
+      {/* Calculator Section */}
       <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 space-y-4">
         <h3 className="text-sm font-bold text-white flex items-center gap-2">
           <Calculator className="w-4 h-4 text-emerald-400" />
-          <span>Live Credit Cost Formula Simulator</span>
+          <span>Live Credit Cost Calculator (Backend API)</span>
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 text-xs">
           <div>

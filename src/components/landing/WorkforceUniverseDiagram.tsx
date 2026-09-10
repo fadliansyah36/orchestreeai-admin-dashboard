@@ -718,9 +718,12 @@ export const WorkforceUniverseDiagram: React.FC = () => {
                       }`}
                     >
                       {/* Orchestree Glowing Tree Icon */}
-                      <div className="text-xl sm:text-2xl md:text-3xl filter drop-shadow-[0_0_12px_#16B7D9] animate-pulse">
-                        🌳
-                      </div>
+                      <img
+                        src="/logoorchestreeweb.png"
+                        alt="OrchestreeAI Chief of Staff"
+                        className="w-7 h-7 sm:w-9 sm:h-9 md:w-11 md:h-11 rounded-lg object-contain filter drop-shadow-[0_0_12px_#16B7D9] animate-pulse"
+                        referrerPolicy="no-referrer"
+                      />
                       <h3 className="font-extrabold text-[8px] sm:text-[9.5px] md:text-[11px] uppercase tracking-wider text-white mt-0.5 sm:mt-1 leading-none">
                         AI CHIEF OF STAFF
                       </h3>
@@ -1052,7 +1055,7 @@ const HumanAiCollaborationCards: React.FC = () => {
                 Staff AI Agent bekerja secara autonom sesuai dengan jobdesk, knowledge bisnis, task, prioritas, jadwal kerja, dan aturan perusahaan yang telah ditetapkan.
               </p>
 
-              {/* WhatsApp Simulated Visual Demonstration */}
+              {/* WhatsApp Live Visual Demonstration */}
               <div className="p-4 rounded-2xl bg-[#050B16] border border-[#243247] mb-6 relative overflow-hidden">
                 <div className="flex items-center justify-between mb-2.5 pb-2 border-b border-white/5 text-xs text-[#94A3B8]">
                   <span className="flex items-center space-x-1.5 font-bold text-[#16C784]">
@@ -1186,7 +1189,7 @@ const HumanAiCollaborationCards: React.FC = () => {
                 Dapat meminta bantuan AI Agent, mengirim task melalui WhatsApp, mengirim report pekerjaan, dan berkomunikasi dengan Staff AI Agent tanpa harus membuka aplikasi.
               </p>
 
-              {/* WhatsApp Simulated Visual Demonstration */}
+              {/* WhatsApp Live Visual Demonstration */}
               <div className="p-4 rounded-2xl bg-[#050B16] border border-[#243247] mb-6 relative overflow-hidden">
                 <div className="flex items-center justify-between mb-2.5 pb-2 border-b border-white/5 text-xs text-[#94A3B8]">
                   <span className="flex items-center space-x-1.5 font-bold text-[#06B6D4]">

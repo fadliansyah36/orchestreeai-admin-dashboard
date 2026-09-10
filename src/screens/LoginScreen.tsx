@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Lock, Mail, KeyRound, AlertCircle, Sparkles, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Lock, Mail, KeyRound, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export const LoginScreen: React.FC = () => {
@@ -52,9 +52,12 @@ export const LoginScreen: React.FC = () => {
       <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl p-8 relative z-10">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-14 h-14 bg-gradient-to-tr from-emerald-600 to-teal-500 rounded-2xl mx-auto flex items-center justify-center shadow-lg shadow-emerald-950/80 mb-4">
-            <Sparkles className="w-7 h-7 text-white" />
-          </div>
+          <img
+            src="/logoorchestreeweb.png"
+            alt="OrchestreeAI Logo"
+            className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl mx-auto object-contain shadow-xl shadow-emerald-950/80 mb-4 transition-transform hover:scale-105"
+            referrerPolicy="no-referrer"
+          />
           <h1 className="text-2xl font-bold text-white tracking-tight">OrchestreeAI Platform</h1>
           <p className="text-xs uppercase tracking-widest text-emerald-400 font-semibold mt-1">
             Super Admin Web Console
