@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Lock, Mail, KeyRound, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Lock, Mail, KeyRound, AlertCircle, CheckCircle2, Database } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { isSupabaseConfigured } from '../lib/supabaseClient';
 
 export const LoginScreen: React.FC = () => {
   const {
@@ -66,6 +67,12 @@ export const LoginScreen: React.FC = () => {
             <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
             <span>MFA TOTP Enforced • Role-Restricted</span>
           </div>
+          <div className="mt-2 flex items-center justify-center space-x-1.5 text-[11px]">
+            <Database className={`w-3.5 h-3.5 ${isSupabaseConfigured ? 'text-emerald-400' : 'text-amber-400'}`} />
+            <span className={isSupabaseConfigured ? 'text-emerald-400 font-mono' : 'text-amber-400/90 font-mono'}>
+              {isSupabaseConfigured ? 'Real Data Supabase Terhubung' : 'Supabase: Memerlukan VITE_SUPABASE_ANON_KEY di Settings'}
+            </span>
+          </div>
         </div>
 
         {/* Lockout notification */}
@@ -114,10 +121,13 @@ export const LoginScreen: React.FC = () => {
                   disabled={isLockedOut}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  placeholder="superadmin@orchestree.ai"
+                  placeholder="admin@orchestree.ai atau email Anda"
                   className="w-full bg-slate-950 border border-slate-700/80 rounded-xl py-2.5 pl-10 pr-3.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition disabled:opacity-40"
                 />
               </div>
+              <p className="mt-1 text-[11px] text-slate-400">
+                Gunakan alamat email akun Super Admin yang sebelumnya dibuat di Dashboard Android.
+              </p>
             </div>
 
             <div>

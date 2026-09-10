@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import { AdminUserProfile } from '../types';
 import { api } from '../lib/api';
-import { supabase } from '../lib/supabaseClient';
+import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 
 // Fase 124 / Bagian A.1.2: Super Admin 15-Minute Idle Timeout (Strict 15 minutes)
 export const SUPER_ADMIN_IDLE_TIMEOUT_MS = 15 * 60 * 1000;
@@ -313,7 +313,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       // STRICT AUTHENTICATION: If Supabase fails AND backend fails → REJECT & TRACK ATTEMPTS!
       if (supaError && !backendChallenge) {
-        throw new Error(supaError.message || 'Kredensial login tidak valid. Silakan periksa email dan kata sandi Anda.');
+        const errorMsg = supaError.message || '';
+        const isApiKeyIssue =
+          !isSupabaseConfigured ||
+          errorMsg.toLowerCase().includes('api key') ||
+          errorMsg.toLowerCase().includes('apikey');
+
+        if (isApiKeyIssue) {
+          throw new Error('Koneksi Supabase Belum Terhubung: Kunci API (VITE_SUPABASE_ANON_KEY) tidak valid atau belum dikonfigurasi. Harap masukkan Supabase Anon Key asli project Anda di menu Settings.');
+        }
+
+        throw new Error(errorMsg || 'Kredensial login tidak valid. Silakan periksa email dan kata sandi Anda.');
       }
 
       // Reset attempts on successful password check
@@ -414,6 +424,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         details: 'Kata sandi valid. Menunggu verifikasi 6-digit TOTP (Zero-Bypass Policy Fase 124/86).',
       });
     } catch (err: any) {
+      const errorText = err.message || '';
+      const isInfrastructureOrConfigError =
+        errorText.includes('Koneksi Supabase') ||
+        errorText.toLowerCase().includes('api key') ||
+        errorText.toLowerCase().includes('apikey') ||
+        errorText.toLowerCase().includes('failed to fetch') ||
+        errorText.toLowerCase().includes('networkerror') ||
+        errorText.includes('IP Allowlist');
+
+      if (isInfrastructureOrConfigError) {
+        // Configuration / network issues must NOT penalize user with brute-force lockout!
+        setError(errorText);
+        throw new Error(errorText);
+      }
+
       const newAttempts = failedAttempts + 1;
       setFailedAttempts(newAttempts);
       if (typeof sessionStorage !== 'undefined') {
@@ -441,7 +466,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       const remainingAttempts = MAX_FAILED_LOGIN_ATTEMPTS - newAttempts;
-      const errorMsg = `${err.message || 'Login gagal. Periksa kredensial Anda.'} (Sisa kesempatan: ${remainingAttempts})`;
+      const errorMsg = `${errorText || 'Login gagal. Periksa kredensial Anda.'} (Sisa kesempatan: ${remainingAttempts})`;
       setError(errorMsg);
       throw new Error(errorMsg);
     } finally {
