@@ -30,7 +30,10 @@ TAG="${IMAGE_TAG:-$(git rev-parse --short HEAD 2>/dev/null || echo 'latest')}"
 IMAGE_URL="asia-southeast2-docker.pkg.dev/${PROJECT_ID}/orchestreeai-images/admin-dashboard:${TAG}"
 
 echo ">>> Building dan Pushing container image: ${IMAGE_URL} <<<"
-gcloud builds submit --tag "${IMAGE_URL}" .
+gcloud builds submit --tag "${IMAGE_URL}" \
+  --build-arg "VITE_BACKEND_API_URL=https://api.orchestree.biz.id/api/v1" \
+  --build-arg "NEXT_PUBLIC_BACKEND_API_URL=https://api.orchestree.biz.id/api/v1" \
+  .
 
 echo ">>> Menerapkan image baru ke Deployment admin-dashboard di namespace ${NAMESPACE} <<<"
 kubectl set image deployment/admin-dashboard \

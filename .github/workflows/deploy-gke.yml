@@ -46,7 +46,10 @@ jobs:
             exit 1
           fi
           echo "Building and pushing image: $IMAGE_URL"
-          gcloud builds submit --tag "$IMAGE_URL" .
+          gcloud builds submit --tag "$IMAGE_URL" \
+            --build-arg "VITE_BACKEND_API_URL=https://api.orchestree.biz.id/api/v1" \
+            --build-arg "NEXT_PUBLIC_BACKEND_API_URL=https://api.orchestree.biz.id/api/v1" \
+            .
 
       - name: Get GKE Credentials
         run: gcloud container clusters get-credentials ${{ secrets.GKE_CLUSTER_NAME }} --zone ${{ secrets.GKE_ZONE }}
