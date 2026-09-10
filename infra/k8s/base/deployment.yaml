@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: admin-dashboard
-          image: asia-southeast2-docker.pkg.dev/orchestreeai-prod/orchestreeai-images/admin-dashboard:latest
+          image: asia-southeast2-docker.pkg.dev/orchestree-ai/orchestreeai-images/admin-dashboard:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8080

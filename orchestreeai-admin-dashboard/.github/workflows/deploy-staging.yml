@@ -12,17 +12,49 @@ jobs:
         with: { credentials_json: ${{ secrets.GCP_SA_KEY }} }
       - uses: google-github-actions/setup-gcloud@v2
 
+      - name: Resolve and Validate GCP Project ID
+        id: resolve-project
+        run: |
+          echo ">>> Resolving and validating GCP Project ID <<<"
+          PROJECT_ID="${{ secrets.GCP_PROJECT_ID }}"
+          if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "PROJECT_ID" ]; then
+            PROJECT_ID=$(gcloud config get-value project 2>/dev/null || true)
+          fi
+          if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "PROJECT_ID" ]; then
+            PROJECT_ID="orchestree-ai"
+          fi
+
+          if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "PROJECT_ID" ]; then
+            echo "::error::CRITICAL: GCP PROJECT_ID is empty or unresolved literal 'PROJECT_ID'! Staging deploy aborted."
+            exit 1
+          fi
+
+          echo "✅ GCP PROJECT_ID terverifikasi: $PROJECT_ID"
+          gcloud config set project "$PROJECT_ID"
+          echo "PROJECT_ID=$PROJECT_ID" >> "$GITHUB_ENV"
+          echo "IMAGE_URL=asia-southeast2-docker.pkg.dev/$PROJECT_ID/orchestreeai-images/admin-dashboard:staging-${{ github.sha }}" >> "$GITHUB_ENV"
+
       - name: Build & Push Image
         run: |
-          gcloud builds submit --tag asia-southeast2-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/orchestreeai-images/admin-dashboard:staging-${{ github.sha }} .
+          if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "PROJECT_ID" ]; then
+            echo "::error::Pre-build check failed: PROJECT_ID is empty or unresolved literal 'PROJECT_ID'!"
+            exit 1
+          fi
+          echo "Building and pushing staging image: $IMAGE_URL"
+          gcloud builds submit --tag "$IMAGE_URL" .
 
       - name: Get GKE Credentials
         run: gcloud container clusters get-credentials ${{ secrets.GKE_CLUSTER_NAME }} --zone ${{ secrets.GKE_ZONE }}
 
       - name: Deploy to Staging (UPDATE IMAGE SAJA, JANGAN SENTUH SERVICE/INGRESS)
         run: |
+          if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "PROJECT_ID" ]; then
+            echo "::error::Pre-deploy check failed: PROJECT_ID is empty or unresolved literal 'PROJECT_ID'!"
+            exit 1
+          fi
+          echo "Updating deployment image to $IMAGE_URL"
           kubectl set image deployment/admin-dashboard \
-            admin-dashboard=asia-southeast2-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/orchestreeai-images/admin-dashboard:staging-${{ github.sha }} \
+            admin-dashboard="$IMAGE_URL" \
             -n orchestreeai-admin-staging
           kubectl rollout status deployment/admin-dashboard -n orchestreeai-admin-staging --timeout=180s
 
