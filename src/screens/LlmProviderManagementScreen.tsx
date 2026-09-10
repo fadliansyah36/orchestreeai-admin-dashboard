@@ -10,6 +10,9 @@ import {
   AlertCircle,
   Image as ImageIcon,
   Activity,
+  ChevronDown,
+  ChevronUp,
+  Layers,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { LlmProviderItem, ImageProviderItem, LlmProviderModelItem } from '../types';
@@ -21,11 +24,16 @@ export const LlmProviderManagementScreen: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Live Model Catalog State (Fase 133/134)
+  const [expandedProviderId, setExpandedProviderId] = useState<string | null>(null);
+  const [providerModels, setProviderModels] = useState<Record<string, LlmProviderModelItem[]>>({});
+  const [isLoadingModels, setIsLoadingModels] = useState<boolean>(false);
+
   // New Provider Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [providerName, setProviderName] = useState('');
-  const [providerType, setProviderType] = useState('openai');
-  const [baseUrl, setBaseUrl] = useState('');
+  const [providerType, setProviderType] = useState('nvidia_nim');
+  const [baseUrl, setBaseUrl] = useState('https://integrate.api.nvidia.com/v1');
   const [apiKey, setApiKey] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -91,6 +99,25 @@ export const LlmProviderManagementScreen: React.FC = () => {
       setMessage({ type: 'error', text: err?.message || 'Gagal menambahkan provider.' });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const toggleExpandProvider = async (providerId: string) => {
+    if (expandedProviderId === providerId) {
+      setExpandedProviderId(null);
+      return;
+    }
+    setExpandedProviderId(providerId);
+    if (!providerModels[providerId]) {
+      setIsLoadingModels(true);
+      try {
+        const models = await api.getLlmProviderModels(providerId);
+        setProviderModels((prev) => ({ ...prev, [providerId]: models }));
+      } catch (_e) {
+        console.error('Failed fetching live models:', _e);
+      } finally {
+        setIsLoadingModels(false);
+      }
     }
   };
 
@@ -209,17 +236,78 @@ export const LlmProviderManagementScreen: React.FC = () => {
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
-                <span className="text-[11px] text-slate-500">
-                  {provider.models?.length ?? 0} Model Aktif
-                </span>
-                <button
-                  onClick={() => handleDeleteLlm(provider.id)}
-                  className="p-1 text-slate-500 hover:text-rose-400 transition"
-                  title="Hapus Provider"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+              <div className="pt-2 border-t border-slate-800 flex flex-col space-y-2">
+                <div className="flex items-center justify-between">
+                  <button
+                    onClick={() => toggleExpandProvider(provider.id)}
+                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 transition"
+                  >
+                    <Layers className="w-3.5 h-3.5" />
+                    <span>
+                      {expandedProviderId === provider.id ? 'Tutup Model Catalog' : `Lihat Live Models (${provider.models?.length ?? 0})`}
+                    </span>
+                    {expandedProviderId === provider.id ? (
+                      <ChevronUp className="w-3 h-3" />
+                    ) : (
+                      <ChevronDown className="w-3 h-3" />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleDeleteLlm(provider.id)}
+                    className="p-1 text-slate-500 hover:text-rose-400 transition"
+                    title="Hapus Provider"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Expanded Live Models from llm_provider_models */}
+                {expandedProviderId === provider.id && (
+                  <div className="bg-slate-950/90 rounded-lg p-3 border border-slate-800/80 space-y-2 text-xs animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between text-[11px] text-slate-400 border-b border-slate-800 pb-1.5 font-medium">
+                      <span>Live Catalog (llm_provider_models):</span>
+                      {isLoadingModels && <span className="text-emerald-400 animate-pulse">Memuat...</span>}
+                    </div>
+                    {providerModels[provider.id] && providerModels[provider.id].length > 0 ? (
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                        {providerModels[provider.id].map((mod) => (
+                          <div
+                            key={mod.id}
+                            className="p-2 rounded bg-slate-900/90 border border-slate-800/60 hover:border-emerald-700/50 transition"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-white font-mono text-[11px]">{mod.modelId}</span>
+                              {mod.isDefault && (
+                                <span className="text-[9px] uppercase px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold">
+                                  Default
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[10px] text-slate-400 flex items-center justify-between mt-1">
+                              <span>Ctx: {(mod.contextWindow || 128000).toLocaleString()} tok</span>
+                              <span className="text-emerald-400 font-mono">
+                                In: ${mod.inputCostPerMillion ?? 0.7}/M • Out: ${mod.outputCostPerMillion ?? 0.9}/M
+                              </span>
+                            </div>
+                            {mod.capabilities && mod.capabilities.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1.5">
+                                {mod.capabilities.map((cap, cIdx) => (
+                                  <span key={cIdx} className="text-[9px] px-1 py-0.2 rounded bg-slate-800 text-slate-300">
+                                    {cap}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-slate-400 py-1">
+                        {isLoadingModels ? 'Mengambil model dari registry...' : 'Model default aktif terpasang.'}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -270,7 +358,7 @@ export const LlmProviderManagementScreen: React.FC = () => {
                   required
                   value={providerName}
                   onChange={(e) => setProviderName(e.target.value)}
-                  placeholder="Contoh: OpenAI Platform Dedicated"
+                  placeholder="Contoh: NVIDIA NIM Production Cluster"
                   className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-emerald-500"
                 />
               </div>
@@ -281,11 +369,11 @@ export const LlmProviderManagementScreen: React.FC = () => {
                   onChange={(e) => setProviderType(e.target.value)}
                   className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-emerald-500"
                 >
-                  <option value="openai">OpenAI (GPT-4o, o1, etc)</option>
-                  <option value="anthropic">Anthropic (Claude 3.5 Sonnet/Opus)</option>
+                  <option value="nvidia_nim">NVIDIA NIM (meta/llama-3.1-70b-instruct, mistralai/mixtral-8x22b, etc.)</option>
                   <option value="gemini">Google Gemini (1.5 Flash, 1.5 Pro)</option>
-                  <option value="deepseek">DeepSeek (V3, R1 Reasoner)</option>
-                  <option value="custom_ollama">Self-Hosted Ollama / vLLM</option>
+                  <option value="openai">OpenAI (GPT-4o, o1-preview, etc.)</option>
+                  <option value="groq">Groq LPU (Ultra-Low Latency Inference)</option>
+                  <option value="custom_ollama">Self-Hosted Ollama / vLLM (Private GPU)</option>
                 </select>
               </div>
               <div>

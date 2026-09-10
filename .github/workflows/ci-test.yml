@@ -16,6 +16,13 @@ jobs:
         run: |
           grep -rniE "claude-3|deepseek-chat|service_role|nvidia_api_key|sk-or-" --include="*.ts" --include="*.tsx" src/ && exit 1 || exit 0
 
+      - name: Gate - No Hardcode/Mock/LocalStorage Auth
+        run: |
+          grep -rniE "mock|fake|dummy|hardcod|tenant-enterprise-001" \
+            --include="*.ts" --include="*.tsx" src/ --exclude-dir="landing" --exclude-dir="__tests__" && exit 1 || exit 0
+          grep -rn "localStorage.setItem.*password\|localStorage.setItem.*token" \
+            --include="*.tsx" src/ && exit 1 || exit 0
+
       - name: Lint & Type Check
         run: npm run lint && npm run type-check
 

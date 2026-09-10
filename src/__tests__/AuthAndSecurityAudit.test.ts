@@ -65,11 +65,63 @@ describe('Super Admin Security & Auth Compliance Audit', () => {
     expect(Array.isArray(prospects)).toBe(true);
     expect(prospects.length).toBeGreaterThanOrEqual(1);
 
+    const targetLead = prospects[0];
+    // Test Super Admin Select Trial CRUD
+    const selected = await api.selectProspectForTrial(targetLead.id, {
+      trialStatus: 'SELECTED',
+      trialNotes: 'Selected for exclusive 36 slot allocation',
+    });
+    expect(selected.trialStatus).toBe('SELECTED');
+
+    // Test Super Admin Schedule Demo Meeting CRUD
+    const scheduled = await api.scheduleProspectMeeting(targetLead.id, {
+      scheduledDate: new Date(Date.now() + 86400000).toISOString(),
+      meetingLink: 'https://meet.google.com/orc-exec-demo',
+      notes: 'Live Executive Demo',
+    });
+    expect(scheduled.meetingStatus).toBe('SCHEDULED');
+
+    // Test Super Admin Activate Trial Tenant CRUD (1,000 credits)
+    const activated = await api.activateProspectTrial(targetLead.id);
+    expect(activated.success).toBe(true);
+    expect(activated.initialCredits).toBe(1000);
+    expect(activated.tenantId).toBeDefined();
+
     const analytics = await api.getProspectAnalytics();
     expect(analytics).toBeDefined();
     expect(analytics.maxTrialSlots).toBe(36);
     expect(analytics.totalLeads).toBeGreaterThanOrEqual(1);
     expect(typeof analytics.conversionRate).toBe('number');
+  });
+
+  it('verifies Commercial Plan CRUD updates synchronize with Public Landing PricingSection', async () => {
+    // 1. Fetch initial public plans
+    const initialPlans = await api.getPublicPlans();
+    const initialGrowth = initialPlans.find((p) => p.planCode === 'growth');
+    expect(initialGrowth).toBeDefined();
+
+    // 2. Admin updates Growth Plan price from CommercialPlanManagementScreen
+    const newPrice = 2750000;
+    await api.upsertCommercialPlan({
+      planCode: 'growth',
+      planName: 'Growth Business Elite',
+      billingInterval: 'monthly',
+      price: newPrice,
+      currency: 'IDR',
+      creditAllocation: 7500,
+      humanSeatLimit: 20,
+      aiAgentLimit: 8,
+      isPriceVisible: true,
+      isActive: true,
+      sortOrder: 2,
+    });
+
+    // 3. Verify public endpoint now serves updated price
+    const updatedPlans = await api.getPublicPlans();
+    const updatedGrowth = updatedPlans.find((p) => p.planCode === 'growth');
+    expect(updatedGrowth).toBeDefined();
+    expect(updatedGrowth?.price).toBe(newPrice);
+    expect(updatedGrowth?.creditAllocation).toBe(7500);
   });
 
   it('verifies session idle expiry calculation correctly invalidates expired timestamps', () => {
