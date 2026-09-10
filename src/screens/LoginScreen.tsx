@@ -3,11 +3,25 @@ import { ShieldCheck, Lock, Mail, KeyRound, AlertCircle, Sparkles, CheckCircle2 
 import { useAuth } from '../context/AuthContext';
 
 export const LoginScreen: React.FC = () => {
-  const { login, verifyMfa, mfaPending, setMfaPending, isLoading, error } = useAuth();
+  const {
+    login,
+    verifyMfa,
+    mfaPending,
+    setMfaPending,
+    isLoading,
+    error,
+    lockoutSecondsRemaining,
+    failedAttempts,
+  } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [totpCode, setTotpCode] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+
+  const isLockedOut = lockoutSecondsRemaining > 0;
+  const minutesLeft = Math.floor(lockoutSecondsRemaining / 60);
+  const secondsLeft = lockoutSecondsRemaining % 60;
+  const formattedLockout = `${minutesLeft}:${secondsLeft.toString().padStart(2, '0')}`;
 
   const handleInitialLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,8 +65,33 @@ export const LoginScreen: React.FC = () => {
           </div>
         </div>
 
+        {/* Lockout notification */}
+        {isLockedOut && (
+          <div className="mb-6 p-4 bg-rose-950/70 border border-rose-600 rounded-xl flex items-start space-x-3 text-rose-200 text-xs shadow-lg shadow-rose-950/50 animate-pulse">
+            <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-rose-300 text-sm">Akses Super Admin Terkunci</p>
+              <p className="mt-1 text-slate-300">
+                Sistem mendeteksi 3 kegagalan autentikasi berturut-turut. Akses ditangguhkan selama 15 menit (Anti-Brute Force Protection).
+              </p>
+              <div className="mt-2.5 inline-flex items-center space-x-2 px-2.5 py-1 bg-slate-950/80 border border-rose-800/80 rounded-md font-mono text-rose-400 font-bold">
+                <span>Sisa Waktu Lockout:</span>
+                <span className="text-white text-sm">{formattedLockout}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Attempt warning if not locked out */}
+        {!isLockedOut && failedAttempts > 0 && (
+          <div className="mb-4 p-2.5 bg-amber-950/40 border border-amber-800/60 rounded-xl flex items-center space-x-2 text-amber-300 text-xs">
+            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>Peringatan Keamanan: Percobaan gagal {failedAttempts}/3. Akun akan terkunci 15 menit jika mencapai 3 kali.</span>
+          </div>
+        )}
+
         {/* Error notification */}
-        {(error || formError) && (
+        {!isLockedOut && (error || formError) && (
           <div className="mb-6 p-3.5 bg-rose-950/40 border border-rose-800/60 rounded-xl flex items-start space-x-2.5 text-rose-300 text-xs">
             <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
             <p>{error || formError}</p>
@@ -69,10 +108,11 @@ export const LoginScreen: React.FC = () => {
                 <input
                   type="email"
                   value={email}
+                  disabled={isLockedOut}
                   onChange={(e) => setEmail(e.target.value)}
                   required
                   placeholder="superadmin@orchestree.ai"
-                  className="w-full bg-slate-950 border border-slate-700/80 rounded-xl py-2.5 pl-10 pr-3.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+                  className="w-full bg-slate-950 border border-slate-700/80 rounded-xl py-2.5 pl-10 pr-3.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition disabled:opacity-40"
                 />
               </div>
             </div>
@@ -84,21 +124,24 @@ export const LoginScreen: React.FC = () => {
                 <input
                   type="password"
                   value={password}
+                  disabled={isLockedOut}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   placeholder="••••••••••••"
-                  className="w-full bg-slate-950 border border-slate-700/80 rounded-xl py-2.5 pl-10 pr-3.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+                  className="w-full bg-slate-950 border border-slate-700/80 rounded-xl py-2.5 pl-10 pr-3.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition disabled:opacity-40"
                 />
               </div>
             </div>
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || isLockedOut}
               className="w-full mt-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 rounded-xl text-sm transition shadow-lg shadow-emerald-950/60 disabled:opacity-50 flex items-center justify-center space-x-2"
             >
               {isLoading ? (
                 <span>Memverifikasi Kredensial...</span>
+              ) : isLockedOut ? (
+                <span>Akun Terkunci ({formattedLockout})</span>
               ) : (
                 <>
                   <span>Lanjutkan ke Verifikasi MFA</span>
@@ -125,11 +168,12 @@ export const LoginScreen: React.FC = () => {
                   type="text"
                   maxLength={6}
                   value={totpCode}
+                  disabled={isLockedOut}
                   onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ''))}
                   required
                   autoFocus
                   placeholder="Contoh: 491028"
-                  className="w-full bg-slate-950 border border-emerald-500/50 rounded-xl py-2.5 pl-10 pr-3.5 text-center font-mono text-lg tracking-widest text-emerald-400 placeholder-slate-600 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20 transition"
+                  className="w-full bg-slate-950 border border-emerald-500/50 rounded-xl py-2.5 pl-10 pr-3.5 text-center font-mono text-lg tracking-widest text-emerald-400 placeholder-slate-600 focus:outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20 transition disabled:opacity-40"
                 />
               </div>
             </div>
@@ -137,10 +181,16 @@ export const LoginScreen: React.FC = () => {
             <div className="space-y-2">
               <button
                 type="submit"
-                disabled={isLoading || totpCode.length !== 6}
+                disabled={isLoading || totpCode.length !== 6 || isLockedOut}
                 className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold py-2.5 rounded-xl text-sm transition shadow-lg shadow-emerald-950/60 disabled:opacity-50 flex items-center justify-center space-x-2"
               >
-                {isLoading ? <span>Mengautentikasi Sesi...</span> : <span>Verifikasi & Masuk Dashboard</span>}
+                {isLoading ? (
+                  <span>Mengautentikasi Sesi...</span>
+                ) : isLockedOut ? (
+                  <span>Akun Terkunci ({formattedLockout})</span>
+                ) : (
+                  <span>Verifikasi & Masuk Dashboard</span>
+                )}
               </button>
 
               <button
