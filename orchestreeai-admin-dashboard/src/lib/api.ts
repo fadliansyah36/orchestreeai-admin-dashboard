@@ -1,6 +1,7 @@
 import {
   TenantItem,
   LlmProviderItem,
+  LlmProviderModelItem,
   ImageProviderItem,
   McpToolItem,
   AppRegistryItem,
@@ -160,6 +161,11 @@ class ApiClient {
   // Super Admin: LLM & Image Providers (Bagian A - Fase 93.A, 82)
   async getLlmProviders(): Promise<LlmProviderItem[]> {
     return this.request<LlmProviderItem[]>('/admin/llm-providers');
+  }
+
+  // Live Model Catalog for Provider (Fase 133/134)
+  async getLlmProviderModels(providerId: string): Promise<LlmProviderModelItem[]> {
+    return this.request<LlmProviderModelItem[]>(`/admin/llm-providers/${providerId}/models`);
   }
 
   async createLlmProvider(data: {

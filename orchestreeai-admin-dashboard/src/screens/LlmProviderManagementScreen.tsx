@@ -13,10 +13,11 @@ import {
   ShieldCheck,
   Activity,
   Layers,
-  Sparkles
+  Sparkles,
+  X
 } from 'lucide-react';
 import { api } from '../lib/api';
-import { LlmProviderItem, ImageProviderItem } from '../types';
+import { LlmProviderItem, ImageProviderItem, LlmProviderModelItem } from '../types';
 
 export const LlmProviderManagementScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'llm' | 'image'>('llm');
@@ -33,7 +34,10 @@ export const LlmProviderManagementScreen: React.FC = () => {
   const [taskSpecialization, setTaskSpecialization] = useState('general');
   const [fallbackPriority, setFallbackPriority] = useState<number>(1);
   const [apiKey, setApiKey] = useState('');
-  const [modelsInput, setModelsInput] = useState('');
+  const [selectedModels, setSelectedModels] = useState<string[]>([]);
+  const [customModelInput, setCustomModelInput] = useState<string>('');
+  const [availableLiveModels, setAvailableLiveModels] = useState<LlmProviderModelItem[]>([]);
+  const [isLoadingLiveModels, setIsLoadingLiveModels] = useState<boolean>(false);
 
   // Image Modal State
   const [isImageModalOpen, setIsImageModalOpen] = useState<boolean>(false);
@@ -41,7 +45,7 @@ export const LlmProviderManagementScreen: React.FC = () => {
   const [imageProviderType, setImageProviderType] = useState('OPENAI_DALLE3');
   const [imagePriority, setImagePriority] = useState<number>(1);
   const [imageApiKey, setImageApiKey] = useState('');
-  const [imageModelsInput, setImageModelsInput] = useState('dall-e-3, dall-e-2');
+  const [imageModelsInput, setImageModelsInput] = useState('');
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -63,38 +67,77 @@ export const LlmProviderManagementScreen: React.FC = () => {
     fetchData();
   }, []);
 
+  const fetchLiveModelsForProvider = async (providerId: string) => {
+    setIsLoadingLiveModels(true);
+    try {
+      const models = await api.getLlmProviderModels(providerId);
+      setAvailableLiveModels(models || []);
+    } catch (err) {
+      console.warn('Could not fetch live models for provider', providerId, err);
+      setAvailableLiveModels([]);
+    } finally {
+      setIsLoadingLiveModels(false);
+    }
+  };
+
   const openAddLlmModal = () => {
     setEditingProviderId(null);
     setProviderName('');
-    setProviderType('OPENROUTER');
+    setProviderType('NVIDIA_NIM');
     setBaseUrl('');
     setTaskSpecialization('general');
     setFallbackPriority(providers.length + 1);
     setApiKey('');
-    setModelsInput('deepseek-chat, gpt-4o, claude-3-5-sonnet');
+    setSelectedModels([]);
+    setCustomModelInput('');
+    setAvailableLiveModels([]);
     setIsLlmModalOpen(true);
   };
 
-  const openEditLlmModal = (p: LlmProviderItem) => {
-    setEditingProviderId(p.id || p.provider);
+  const openEditLlmModal = async (p: LlmProviderItem) => {
+    const provId = p.id || p.provider;
+    setEditingProviderId(provId);
     setProviderName(p.provider);
     setProviderType(p.providerType || 'OPENROUTER');
     setBaseUrl(p.baseUrl || '');
     setTaskSpecialization(p.taskSpecialization || 'general');
     setFallbackPriority(p.priority || 1);
     setApiKey('');
-    setModelsInput(p.models.join(', '));
+    setSelectedModels([...(p.models || [])]);
+    setCustomModelInput('');
+    setAvailableLiveModels([]);
     setIsLlmModalOpen(true);
+    if (p.id) {
+      await fetchLiveModelsForProvider(p.id);
+    }
+  };
+
+  const handleSelectLiveModel = (modelId: string) => {
+    if (!modelId) return;
+    if (!selectedModels.includes(modelId)) {
+      setSelectedModels((prev) => [...prev, modelId]);
+    }
+  };
+
+  const handleAddCustomModel = () => {
+    const trimmed = customModelInput.trim();
+    if (trimmed && !selectedModels.includes(trimmed)) {
+      setSelectedModels((prev) => [...prev, trimmed]);
+      setCustomModelInput('');
+    }
+  };
+
+  const handleRemoveModel = (modelId: string) => {
+    setSelectedModels((prev) => prev.filter((m) => m !== modelId));
   };
 
   const handleSaveLlmProvider = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (selectedModels.length === 0) {
+      alert('Pilih minimal satu model dari katalog live atau tambahkan identifier model');
+      return;
+    }
     try {
-      const parsedModels = modelsInput
-        .split(',')
-        .map((m) => m.trim())
-        .filter(Boolean);
-
       if (editingProviderId) {
         await api.updateLlmProvider(editingProviderId, {
           name: providerName,
@@ -102,7 +145,7 @@ export const LlmProviderManagementScreen: React.FC = () => {
           baseUrl: baseUrl || undefined,
           taskSpecialization,
           fallbackPriority,
-          models: parsedModels,
+          models: selectedModels,
         });
       } else {
         await api.createLlmProvider({
@@ -112,7 +155,7 @@ export const LlmProviderManagementScreen: React.FC = () => {
           taskSpecialization,
           fallbackPriority,
           apiKey: apiKey || undefined,
-          models: parsedModels,
+          models: selectedModels,
         });
       }
       setIsLlmModalOpen(false);
@@ -480,6 +523,7 @@ export const LlmProviderManagementScreen: React.FC = () => {
                     className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none"
                   >
                     <option value="OPENROUTER">OpenRouter Multi-Model</option>
+                    <option value="NVIDIA_NIM">NVIDIA NIM Enterprise (Kimi / Qwen / Llama)</option>
                     <option value="GROQ">Groq LPU Ultra-Low Latency</option>
                     <option value="DEEPSEEK">DeepSeek Native API</option>
                     <option value="OPENAI">OpenAI Direct</option>
@@ -529,7 +573,7 @@ export const LlmProviderManagementScreen: React.FC = () => {
                 </label>
                 <input
                   type="text"
-                  placeholder="https://api.groq.com/openai/v1"
+                  placeholder="https://integrate.api.nvidia.com/v1"
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none font-mono"
@@ -549,18 +593,105 @@ export const LlmProviderManagementScreen: React.FC = () => {
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                  Model Identifiers (Dipisah koma)
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="deepseek-chat, gpt-4o, claude-3-5-sonnet"
-                  value={modelsInput}
-                  onChange={(e) => setModelsInput(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none font-mono"
-                />
+              {/* Dynamic Live Model Catalog Section */}
+              <div className="space-y-2 pt-2 border-t border-slate-800">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Katalog Model LIVE (llm_provider_models)
+                  </label>
+                  {editingProviderId && (
+                    <button
+                      type="button"
+                      onClick={() => fetchLiveModelsForProvider(editingProviderId)}
+                      disabled={isLoadingLiveModels}
+                      className="inline-flex items-center space-x-1 text-[11px] text-emerald-400 hover:text-emerald-300 transition"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isLoadingLiveModels ? 'animate-spin' : ''}`} />
+                      <span>Sync Katalog Live</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Dropdown to pick from live models */}
+                <div className="flex gap-2">
+                  <select
+                    onChange={(e) => {
+                      handleSelectLiveModel(e.target.value);
+                      e.target.value = '';
+                    }}
+                    defaultValue=""
+                    disabled={isLoadingLiveModels}
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none font-mono"
+                  >
+                    <option value="" disabled>
+                      {isLoadingLiveModels
+                        ? 'Memuat katalog LIVE...'
+                        : availableLiveModels.length > 0
+                        ? `-- Pilih model dari katalog LIVE (${availableLiveModels.length} tersedia) --`
+                        : '-- Pilih model dari katalog LIVE provider --'}
+                    </option>
+                    {availableLiveModels.map((m) => (
+                      <option key={m.id || m.modelId} value={m.modelId}>
+                        {m.displayName || m.modelId} {m.contextWindow ? `(${m.contextWindow.toLocaleString()} tokens)` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Custom Model Input */}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Tambah identifier model..."
+                    value={customModelInput}
+                    onChange={(e) => setCustomModelInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddCustomModel();
+                      }
+                    }}
+                    className="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-xs focus:ring-1 focus:ring-emerald-500 focus:outline-none font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddCustomModel}
+                    className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium transition"
+                  >
+                    Tambah
+                  </button>
+                </div>
+
+                {/* Selected Models Badges */}
+                <div className="mt-2">
+                  <span className="text-[11px] text-slate-400 block mb-1">
+                    Model Terpilih ({selectedModels.length}):
+                  </span>
+                  {selectedModels.length === 0 ? (
+                    <div className="p-3 bg-slate-950/60 border border-dashed border-slate-800 rounded-lg text-center text-xs text-slate-500">
+                      Belum ada model yang dipilih. Pilih dari dropdown katalog LIVE di atas atau ketik identifier model.
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5 p-2 bg-slate-950/40 border border-slate-800/80 rounded-lg max-h-32 overflow-y-auto">
+                      {selectedModels.map((m) => (
+                        <span
+                          key={m}
+                          className="inline-flex items-center space-x-1.5 text-[11px] bg-slate-800 text-emerald-300 px-2.5 py-1 rounded-md border border-emerald-800/40 font-mono"
+                        >
+                          <span>{m}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveModel(m)}
+                            className="text-slate-400 hover:text-rose-400 focus:outline-none"
+                            title="Hapus model"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-800">
@@ -657,6 +788,7 @@ export const LlmProviderManagementScreen: React.FC = () => {
                 <input
                   type="text"
                   required
+                  placeholder="Model identifiers, dipisah koma"
                   value={imageModelsInput}
                   onChange={(e) => setImageModelsInput(e.target.value)}
                   className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white text-xs focus:ring-1 focus:ring-indigo-500 focus:outline-none font-mono"

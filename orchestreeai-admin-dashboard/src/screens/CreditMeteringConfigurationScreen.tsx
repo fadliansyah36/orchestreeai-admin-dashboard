@@ -56,7 +56,7 @@ export const CreditMeteringConfigurationScreen: React.FC = () => {
   const [simContext, setSimContext] = useState<CreditCostContext>({
     activityType: 'chat_completion',
     complexityLevel: 'medium',
-    modelUsed: 'gemini-1.5-flash',
+    modelUsed: '',
     toolsInvoked: 1,
     executionType: 'sync',
   });
@@ -512,16 +512,30 @@ export const CreditMeteringConfigurationScreen: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-slate-400 mb-1">Model LLM yang Digunakan</label>
-                  <select
-                    value={simContext.modelUsed}
-                    onChange={(e) => setSimContext({ ...simContext, modelUsed: e.target.value })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-slate-200 focus:border-teal-500 focus:outline-none font-mono"
-                  >
-                    <option value="gemini-1.5-flash">gemini-1.5-flash (0.8x)</option>
-                    <option value="gemini-1.5-pro">gemini-1.5-pro (1.5x)</option>
-                    <option value="gpt-4o">gpt-4o (2.0x)</option>
-                    <option value="claude-3-5-sonnet">claude-3-5-sonnet (2.0x)</option>
-                  </select>
+                  {factors.filter((f) => f.factorType === 'model_cost_factor').length > 0 ? (
+                    <select
+                      value={simContext.modelUsed}
+                      onChange={(e) => setSimContext({ ...simContext, modelUsed: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-slate-200 focus:border-teal-500 focus:outline-none font-mono"
+                    >
+                      <option value="">-- Pilih Model dari Faktor Biaya LIVE --</option>
+                      {factors
+                        .filter((f) => f.factorType === 'model_cost_factor')
+                        .map((f) => (
+                          <option key={f.factorKey} value={f.factorKey}>
+                            {f.factorKey} ({f.factorValue}x)
+                          </option>
+                        ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      placeholder="e.g. Model identifier..."
+                      value={simContext.modelUsed}
+                      onChange={(e) => setSimContext({ ...simContext, modelUsed: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-slate-200 focus:border-teal-500 focus:outline-none font-mono text-xs"
+                    />
+                  )}
                 </div>
               </div>
 
@@ -754,7 +768,7 @@ export const CreditMeteringConfigurationScreen: React.FC = () => {
                   required
                   value={factorFormData.factorKey}
                   onChange={(e) => setFactorFormData({ ...factorFormData, factorKey: e.target.value })}
-                  placeholder="e.g. gpt-4o, simple, multi_tool"
+                  placeholder="e.g. model-identifier, simple, multi_tool"
                   disabled={!!editingFactor}
                   className="w-full bg-slate-950 border border-slate-800 rounded px-3 py-2 text-slate-200 focus:border-teal-500 focus:outline-none font-mono"
                 />

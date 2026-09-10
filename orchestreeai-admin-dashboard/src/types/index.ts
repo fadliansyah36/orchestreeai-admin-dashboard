@@ -33,6 +33,20 @@ export interface LlmProviderItem {
   isHealthy?: boolean;
 }
 
+export interface LlmProviderModelItem {
+  id: string;
+  providerId?: string;
+  modelId: string;
+  displayName?: string;
+  contextWindow?: number;
+  maxOutputTokens?: number;
+  isVisionSupported?: boolean;
+  isReasoningSupported?: boolean;
+  pricingInputTokens?: number;
+  pricingOutputTokens?: number;
+  isActive?: boolean;
+}
+
 export interface ImageProviderItem {
   id: string;
   name: string;

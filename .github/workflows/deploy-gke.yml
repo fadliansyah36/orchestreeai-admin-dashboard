@@ -1,0 +1,38 @@
+name: Deploy Production - OrchestreeAI Admin Dashboard
+on:
+  push: { branches: [main] }
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with: { credentials_json: ${{ secrets.GCP_SA_KEY }} }
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Gate - No Hardcode Credential in Build Output
+        run: |
+          grep -rniE "claude-3|deepseek-chat|service_role" --include="*.ts" --include="*.tsx" src/ && exit 1 || exit 0
+
+      - name: Build & Push Image (tag versioned)
+        run: |
+          gcloud builds submit --tag asia-southeast2-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/orchestreeai-images/admin-dashboard:${{ github.sha }} .
+
+      - name: Get GKE Credentials
+        run: gcloud container clusters get-credentials ${{ secrets.GKE_CLUSTER_NAME }} --zone ${{ secrets.GKE_ZONE }}
+
+      - name: Deploy to Production (UPDATE IMAGE SAJA — TIDAK MENYENTUH SERVICE/INGRESS/STATIC IP)
+        run: |
+          kubectl set image deployment/admin-dashboard \
+            admin-dashboard=asia-southeast2-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/orchestreeai-images/admin-dashboard:${{ github.sha }} \
+            -n orchestreeai-admin
+          kubectl rollout status deployment/admin-dashboard -n orchestreeai-admin --timeout=180s
+
+      - name: Verify Production Health & Rollback on Failure (Cek KEDUA domain: Landing Page & Admin)
+        run: |
+          sleep 15
+          curl -f https://orchestree.biz.id || (kubectl rollout undo deployment/admin-dashboard -n orchestreeai-admin && exit 1)
+          curl -f https://admin.orchestree.biz.id || (kubectl rollout undo deployment/admin-dashboard -n orchestreeai-admin && exit 1)
