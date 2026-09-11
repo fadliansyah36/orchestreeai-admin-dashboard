@@ -34,12 +34,24 @@ SUPABASE_URL="${VITE_SUPABASE_URL:-https://exfvfyiwftywqjcsofgf.supabase.co}"
 BACKEND_API_URL="${VITE_BACKEND_API_URL:-https://api.orchestree.biz.id/api/v1}"
 
 echo ">>> Building dan Pushing container image: ${IMAGE_URL} <<<"
-gcloud builds submit --tag "${IMAGE_URL}" \
-  --build-arg "VITE_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}" \
-  --build-arg "VITE_SUPABASE_URL=${SUPABASE_URL}" \
-  --build-arg "VITE_BACKEND_API_URL=${BACKEND_API_URL}" \
-  --build-arg "NEXT_PUBLIC_BACKEND_API_URL=${BACKEND_API_URL}" \
-  .
+if command -v docker &>/dev/null; then
+  echo ">>> Menggunakan Docker lokal dengan build-args <<<"
+  gcloud auth configure-docker asia-southeast2-docker.pkg.dev --quiet || true
+  docker build \
+    --build-arg VITE_SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY}" \
+    --build-arg VITE_SUPABASE_URL="${SUPABASE_URL}" \
+    --build-arg VITE_BACKEND_API_URL="${BACKEND_API_URL}" \
+    --build-arg NEXT_PUBLIC_BACKEND_API_URL="${BACKEND_API_URL}" \
+    -t "${IMAGE_URL}" \
+    .
+  docker push "${IMAGE_URL}"
+else
+  echo ">>> Docker tidak ditemukan, menggunakan Google Cloud Build (cloudbuild.yaml) <<<"
+  gcloud builds submit \
+    --config=cloudbuild.yaml \
+    --substitutions="_IMAGE_REPO=asia-southeast2-docker.pkg.dev/${PROJECT_ID}/orchestreeai-images,_IMAGE_TAG=${TAG},_VITE_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY},_VITE_SUPABASE_URL=${SUPABASE_URL},_VITE_BACKEND_API_URL=${BACKEND_API_URL}" \
+    .
+fi
 
 echo ">>> Menerapkan image baru ke Deployment admin-dashboard di namespace ${NAMESPACE} <<<"
 kubectl set image deployment/admin-dashboard \

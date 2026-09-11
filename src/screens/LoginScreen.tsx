@@ -70,7 +70,9 @@ export const LoginScreen: React.FC = () => {
           <div className="mt-2 flex items-center justify-center space-x-1.5 text-[11px]">
             <Database className={`w-3.5 h-3.5 ${isSupabaseConfigured ? 'text-emerald-400' : 'text-amber-400'}`} />
             <span className={isSupabaseConfigured ? 'text-emerald-400 font-mono' : 'text-amber-400/90 font-mono'}>
-              {isSupabaseConfigured ? 'Real Data Supabase Terhubung' : 'Supabase: VITE_SUPABASE_ANON_KEY Belum Dikonfigurasi'}
+              {isSupabaseConfigured
+                ? 'Real Data Supabase Terhubung'
+                : 'Supabase: VITE_SUPABASE_ANON_KEY Belum Terinjeksi (--build-arg docker build)'}
             </span>
           </div>
         </div>

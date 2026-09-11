@@ -34,14 +34,28 @@ jobs:
           echo "PROJECT_ID=$PROJECT_ID" >> "$GITHUB_ENV"
           echo "IMAGE_URL=asia-southeast2-docker.pkg.dev/$PROJECT_ID/orchestreeai-images/admin-dashboard:staging-${{ github.sha }}" >> "$GITHUB_ENV"
 
+      - name: Configure Docker for Artifact Registry
+        run: |
+          gcloud auth configure-docker asia-southeast2-docker.pkg.dev --quiet
+
       - name: Build & Push Image
+        env:
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://exfvfyiwftywqjcsofgf.supabase.co' }}
+          VITE_BACKEND_API_URL: 'https://api.orchestree.biz.id/api/v1'
         run: |
           if [ -z "$PROJECT_ID" ] || [ "$PROJECT_ID" = "PROJECT_ID" ]; then
             echo "::error::Pre-build check failed: PROJECT_ID is empty or unresolved literal 'PROJECT_ID'!"
             exit 1
           fi
-          echo "Building and pushing staging image: $IMAGE_URL"
-          gcloud builds submit --tag "$IMAGE_URL" .
+          echo "Building and pushing staging image with build-args: $IMAGE_URL"
+          docker build \
+            --build-arg VITE_SUPABASE_ANON_KEY="$VITE_SUPABASE_ANON_KEY" \
+            --build-arg VITE_SUPABASE_URL="$VITE_SUPABASE_URL" \
+            --build-arg VITE_BACKEND_API_URL="$VITE_BACKEND_API_URL" \
+            --build-arg NEXT_PUBLIC_BACKEND_API_URL="$VITE_BACKEND_API_URL" \
+            -t "$IMAGE_URL" .
+          docker push "$IMAGE_URL"
 
       - name: Get GKE Credentials
         run: gcloud container clusters get-credentials ${{ secrets.GKE_CLUSTER_NAME }} --zone ${{ secrets.GKE_ZONE }}
