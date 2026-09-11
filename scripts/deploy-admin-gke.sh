@@ -29,10 +29,16 @@ NAMESPACE="${NAMESPACE:-orchestreeai-admin}"
 TAG="${IMAGE_TAG:-$(git rev-parse --short HEAD 2>/dev/null || echo 'latest')}"
 IMAGE_URL="asia-southeast2-docker.pkg.dev/${PROJECT_ID}/orchestreeai-images/admin-dashboard:${TAG}"
 
+SUPABASE_ANON_KEY="${VITE_SUPABASE_ANON_KEY:-}"
+SUPABASE_URL="${VITE_SUPABASE_URL:-https://exfvfyiwftywqjcsofgf.supabase.co}"
+BACKEND_API_URL="${VITE_BACKEND_API_URL:-https://api.orchestree.biz.id/api/v1}"
+
 echo ">>> Building dan Pushing container image: ${IMAGE_URL} <<<"
 gcloud builds submit --tag "${IMAGE_URL}" \
-  --build-arg "VITE_BACKEND_API_URL=https://api.orchestree.biz.id/api/v1" \
-  --build-arg "NEXT_PUBLIC_BACKEND_API_URL=https://api.orchestree.biz.id/api/v1" \
+  --build-arg "VITE_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}" \
+  --build-arg "VITE_SUPABASE_URL=${SUPABASE_URL}" \
+  --build-arg "VITE_BACKEND_API_URL=${BACKEND_API_URL}" \
+  --build-arg "NEXT_PUBLIC_BACKEND_API_URL=${BACKEND_API_URL}" \
   .
 
 echo ">>> Menerapkan image baru ke Deployment admin-dashboard di namespace ${NAMESPACE} <<<"

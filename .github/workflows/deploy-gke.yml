@@ -47,6 +47,8 @@ jobs:
           fi
           echo "Building and pushing image: $IMAGE_URL"
           gcloud builds submit --tag "$IMAGE_URL" \
+            --build-arg "VITE_SUPABASE_ANON_KEY=${{ secrets.VITE_SUPABASE_ANON_KEY }}" \
+            --build-arg "VITE_SUPABASE_URL=${{ secrets.VITE_SUPABASE_URL || 'https://exfvfyiwftywqjcsofgf.supabase.co' }}" \
             --build-arg "VITE_BACKEND_API_URL=https://api.orchestree.biz.id/api/v1" \
             --build-arg "NEXT_PUBLIC_BACKEND_API_URL=https://api.orchestree.biz.id/api/v1" \
             .

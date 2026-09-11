@@ -320,7 +320,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           errorMsg.toLowerCase().includes('apikey');
 
         if (isApiKeyIssue) {
-          throw new Error('Koneksi Supabase Belum Terhubung: Kunci API (VITE_SUPABASE_ANON_KEY) tidak valid atau belum dikonfigurasi. Harap masukkan Supabase Anon Key asli project Anda di menu Settings.');
+          throw new Error('Koneksi Supabase Belum Terhubung: Kunci API (VITE_SUPABASE_ANON_KEY) tidak valid atau belum diinjeksikan saat build time Docker.');
         }
 
         throw new Error(errorMsg || 'Kredensial login tidak valid. Silakan periksa email dan kata sandi Anda.');
