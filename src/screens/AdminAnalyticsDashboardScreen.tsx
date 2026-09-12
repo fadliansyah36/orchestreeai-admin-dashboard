@@ -38,7 +38,9 @@ import {
   TaskActivitySummaryResponse,
   UniversalSelectionUsageResponse,
   AnalyticsPeriod,
+  WorkflowExecutionSummary,
 } from '../types';
+import { HonestErrorBanner, HonestErrorInfo } from '../components/HonestErrorBanner';
 
 export const AdminAnalyticsDashboardScreen: React.FC = () => {
   // Global & Individual Chart Periods (Supports real re-fetch per chart or globally)
@@ -47,6 +49,9 @@ export const AdminAnalyticsDashboardScreen: React.FC = () => {
   const [llmPeriod, setLlmPeriod] = useState<AnalyticsPeriod>('monthly');
   const [kpiPeriod, setKpiPeriod] = useState<AnalyticsPeriod>('monthly');
 
+  // Honest Error Banner State
+  const [honestError, setHonestError] = useState<HonestErrorInfo | null>(null);
+
   // Backend Data States
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
   const [usageCredit, setUsageCredit] = useState<TenantUsageCreditItem[]>([]);
@@ -54,6 +59,10 @@ export const AdminAnalyticsDashboardScreen: React.FC = () => {
   const [kpiSummary, setKpiSummary] = useState<KpiSummary | null>(null);
   const [taskActivity, setTaskActivity] = useState<TaskActivitySummaryResponse | null>(null);
   const [isLoadingTaskActivity, setIsLoadingTaskActivity] = useState<boolean>(false);
+
+  // Workflow Executions State (Verifikasi Bug Foreign Key Backend)
+  const [workflowExecutions, setWorkflowExecutions] = useState<WorkflowExecutionSummary[]>([]);
+  const [isLoadingWorkflows, setIsLoadingWorkflows] = useState<boolean>(false);
 
   // FASE 114 / BAGIAN J / LANGKAH 1: Universal AI Selection & Ranking Usage State
   const [selectionUsage, setSelectionUsage] = useState<UniversalSelectionUsageResponse | null>(null);
@@ -145,9 +154,23 @@ export const AdminAnalyticsDashboardScreen: React.FC = () => {
     }
   }, []);
 
-  // Fetch all initial data
+  // FASE 102 & BUG FIX VERIFICATION: Fetch Workflow Executions platform-wide
+  const fetchWorkflowExecutions = useCallback(async () => {
+    setIsLoadingWorkflows(true);
+    try {
+      const data = await api.getWorkflowExecutions(10);
+      setWorkflowExecutions(data || []);
+    } catch (err: any) {
+      console.error('Failed fetching workflow executions:', err);
+    } finally {
+      setIsLoadingWorkflows(false);
+    }
+  }, []);
+
+  // Fetch all initial data with Honest Error reporting
   const loadAllAnalytics = useCallback(async () => {
     setIsRefreshing(true);
+    setHonestError(null);
     try {
       await Promise.all([
         fetchOverview(),
@@ -156,12 +179,35 @@ export const AdminAnalyticsDashboardScreen: React.FC = () => {
         fetchKpiSummary(kpiPeriod),
         fetchTaskActivity(),
         fetchSelectionUsage(),
+        fetchWorkflowExecutions(),
       ]);
+    } catch (err: any) {
+      console.error('[AdminAnalytics] Load analytics error:', err);
+      setHonestError({
+        endpoint: '/admin/analytics/overview & /admin/workflow-executions',
+        status: err?.status || err?.statusCode || 'FETCH_ERROR',
+        message:
+          err?.message ||
+          'Terjadi kegagalan saat menyinkronkan data platform analytics dari backend.',
+        rawDetails: err?.stack || err?.toString(),
+        timestamp: new Date().toLocaleTimeString(),
+      });
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [fetchOverview, fetchUsageCredit, creditPeriod, fetchLlmUsage, llmPeriod, fetchKpiSummary, kpiPeriod, fetchTaskActivity, fetchSelectionUsage]);
+  }, [
+    fetchOverview,
+    fetchUsageCredit,
+    creditPeriod,
+    fetchLlmUsage,
+    llmPeriod,
+    fetchKpiSummary,
+    kpiPeriod,
+    fetchTaskActivity,
+    fetchSelectionUsage,
+    fetchWorkflowExecutions,
+  ]);
 
   useEffect(() => {
     loadAllAnalytics();
@@ -202,6 +248,7 @@ export const AdminAnalyticsDashboardScreen: React.FC = () => {
       fetchOverview();
       fetchUsageCredit(creditPeriod);
       fetchLlmUsage(llmPeriod);
+      fetchWorkflowExecutions();
     };
 
     const ordersChannel = supabase
@@ -237,13 +284,23 @@ export const AdminAnalyticsDashboardScreen: React.FC = () => {
       })
       .subscribe();
 
+    // Verifikasi Bug Foreign Key: Subscribing to workflow_executions
+    const workflowChannel = supabase
+      .channel('realtime:superadmin-workflow-executions')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'workflow_executions' }, (payload) => {
+        console.log('[Supabase Realtime] workflow_executions event received:', payload);
+        triggerRealtimeUpdate('workflow_executions');
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(ordersChannel);
       supabase.removeChannel(paymentsChannel);
       supabase.removeChannel(llmLogsChannel);
       supabase.removeChannel(selectionRequestsChannel);
+      supabase.removeChannel(workflowChannel);
     };
-  }, [fetchOverview, fetchUsageCredit, creditPeriod, fetchLlmUsage, llmPeriod]);
+  }, [fetchOverview, fetchUsageCredit, creditPeriod, fetchLlmUsage, llmPeriod, fetchWorkflowExecutions]);
 
   // ---------------------------------------------------------------------------
   // Transaction Verification (DoD Helper)

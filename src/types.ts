@@ -225,13 +225,29 @@ export interface UsageAnalytics {
   costSavingsPercentage: number;
   tokensByProvider: Record<string, number>;
   costByProvider: Record<string, number>;
-  breakdown: any[];
+  breakdown: Array<{
+    tenant?: string;
+    tenantId?: string;
+    tenantName?: string;
+    tokens?: number;
+    totalTokens?: number;
+    costUsd?: number;
+    totalCostUsd?: number;
+    provider?: string;
+  }>;
   historicalTrend: Array<{
     date: string;
     tokens: number;
     cost: number;
   }>;
+  activeProviderChain?: {
+    reasoning: string[];
+    image: string[];
+    excludedProviders: string[];
+  };
 }
+
+export type AdminUsageAnalyticsResponse = UsageAnalytics;
 
 export interface DeadLetterRecord {
   id: string;

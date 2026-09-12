@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Cpu,
   Plus,
@@ -13,9 +13,14 @@ import {
   ChevronDown,
   ChevronUp,
   Layers,
+  Sparkles,
+  ShieldCheck,
+  AlertOctagon,
+  Award,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { LlmProviderItem, ImageProviderItem, LlmProviderModelItem } from '../types';
+import { HonestErrorBanner, HonestErrorInfo } from '../components/HonestErrorBanner';
 
 export const LlmProviderManagementScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'llm' | 'image'>('llm');
@@ -23,6 +28,7 @@ export const LlmProviderManagementScreen: React.FC = () => {
   const [imageProviders, setImageProviders] = useState<ImageProviderItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [rawBackendError, setRawBackendError] = useState<HonestErrorInfo | null>(null);
 
   // Live Model Catalog State (Fase 133/134)
   const [expandedProviderId, setExpandedProviderId] = useState<string | null>(null);
@@ -35,27 +41,59 @@ export const LlmProviderManagementScreen: React.FC = () => {
   const [providerType, setProviderType] = useState('nvidia_nim');
   const [baseUrl, setBaseUrl] = useState('https://integrate.api.nvidia.com/v1');
   const [apiKey, setApiKey] = useState('');
+  const [modelsInput, setModelsInput] = useState('');
+  const [priorityInput, setPriorityInput] = useState<number>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const fetchProviders = async () => {
+  const fetchProviders = useCallback(async () => {
     setIsLoading(true);
+    setRawBackendError(null);
     try {
       const [llmData, imgData] = await Promise.all([
         api.getLlmProviders(),
         api.getImageProviders(),
       ]);
-      setLlmProviders(llmData);
-      setImageProviders(imgData);
+
+      // Filter out any legacy cache containing eliminated providers (OpenAI, Gemini)
+      const cleanLlm = (llmData || []).filter(
+        (p) =>
+          !p.providerType?.toLowerCase().includes('openai') &&
+          !p.providerType?.toLowerCase().includes('gemini') &&
+          !p.name?.toLowerCase().includes('openai') &&
+          !p.name?.toLowerCase().includes('gemini')
+      );
+
+      const cleanImg = (imgData || []).filter(
+        (p) =>
+          !p.providerType?.toLowerCase().includes('dalle') &&
+          !p.providerType?.toLowerCase().includes('openai') &&
+          !p.providerType?.toLowerCase().includes('gemini') &&
+          !p.name?.toLowerCase().includes('dall-e') &&
+          !p.name?.toLowerCase().includes('gemini')
+      );
+
+      setLlmProviders(cleanLlm);
+      setImageProviders(cleanImg);
     } catch (err: any) {
-      setMessage({ type: 'error', text: err?.message || 'Gagal memuat provider LLM.' });
+      console.error('[LlmProvider] Failed fetching providers:', err);
+      setRawBackendError({
+        endpoint: activeTab === 'llm' ? '/admin/llm-providers' : '/admin/image-providers',
+        status: err?.status || err?.statusCode || 'BACKEND_ERROR',
+        message:
+          err?.message ||
+          'Gagal mengambil konfigurasi provider LLM/Image dari backend server.',
+        rawDetails: err?.stack || err?.toString(),
+        timestamp: new Date().toLocaleTimeString(),
+      });
+      setMessage({ type: 'error', text: err?.message || 'Gagal memuat data provider.' });
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [activeTab]);
 
   useEffect(() => {
     fetchProviders();
-  }, []);
+  }, [fetchProviders]);
 
   const handleToggleLlm = async (id: string, currentEnabled: boolean) => {
     try {
@@ -78,25 +116,52 @@ export const LlmProviderManagementScreen: React.FC = () => {
     }
   };
 
-  const handleCreateLlm = async (e: React.FormEvent) => {
+  const handleDeleteImage = async (id: string) => {
+    if (!confirm('Apakah Anda yakin ingin menghapus image provider ini?')) return;
+    try {
+      await api.deleteImageProvider(id);
+      setMessage({ type: 'success', text: 'Image provider berhasil dihapus.' });
+      fetchProviders();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err?.message || 'Gagal menghapus image provider.' });
+    }
+  };
+
+  const handleCreateProvider = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      await api.createLlmProvider({
-        name: providerName,
-        providerType,
-        baseUrl: baseUrl || undefined,
-        apiKey: apiKey || undefined,
-        enabled: true,
-      });
-      setMessage({ type: 'success', text: `Provider ${providerName} berhasil ditambahkan.` });
+      if (activeTab === 'llm') {
+        await api.createLlmProvider({
+          name: providerName,
+          providerType,
+          baseUrl: baseUrl || undefined,
+          apiKey: apiKey || undefined,
+          fallbackPriority: priorityInput,
+          enabled: true,
+          models: modelsInput ? modelsInput.split(',').map((s) => s.trim()) : undefined,
+        });
+      } else {
+        await api.createImageProvider({
+          name: providerName,
+          providerType,
+          models: modelsInput
+            ? modelsInput.split(',').map((s) => s.trim())
+            : ['gpt-image-2-turbo'],
+          priority: priorityInput,
+          apiKey: apiKey || undefined,
+        });
+      }
+
+      setMessage({ type: 'success', text: `Provider "${providerName}" berhasil didaftarkan.` });
       setIsModalOpen(false);
       setProviderName('');
       setBaseUrl('');
       setApiKey('');
+      setModelsInput('');
       fetchProviders();
     } catch (err: any) {
-      setMessage({ type: 'error', text: err?.message || 'Gagal menambahkan provider.' });
+      setMessage({ type: 'error', text: err?.message || 'Gagal mendaftarkan provider.' });
     } finally {
       setIsSubmitting(false);
     }
@@ -121,32 +186,125 @@ export const LlmProviderManagementScreen: React.FC = () => {
     }
   };
 
+  const getPriorityBadge = (priority: number = 1, type: 'llm' | 'image') => {
+    if (type === 'llm') {
+      if (priority === 1) {
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-700">
+            <Award className="w-3 h-3 text-emerald-400" />
+            <span>Prioritas 1 • Primary Reasoning</span>
+          </span>
+        );
+      }
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-950 text-indigo-300 border border-indigo-700">
+          <span>Prioritas 2 • Secondary Fallback</span>
+        </span>
+      );
+    } else {
+      if (priority === 1) {
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-fuchsia-950 text-fuchsia-300 border border-fuchsia-700">
+            <Award className="w-3 h-3 text-fuchsia-400" />
+            <span>Prioritas 1 • Primary Image (Apimart)</span>
+          </span>
+        );
+      }
+      if (priority === 2) {
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-950 text-indigo-300 border border-indigo-700">
+            <span>Prioritas 2 • Secondary Image Fallback</span>
+          </span>
+        );
+      }
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-700">
+          <span>Prioritas 3 • Tertiary NIM Image</span>
+        </span>
+      );
+    }
+  };
+
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/60 border border-slate-800 p-5 rounded-xl backdrop-blur">
         <div>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded bg-indigo-950/60 border border-indigo-800/60 text-indigo-300 text-[10px] font-semibold mb-1">
+            <Sparkles className="w-3 h-3 text-amber-400" />
+            <span>Endpoints: /admin/llm-providers & /admin/image-providers</span>
+          </div>
           <h1 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
             <Cpu className="w-5 h-5 text-emerald-400" />
-            <span>LLM & Image Provider Routing Registry</span>
+            <span>Multi-LLM & Image Model Routing Registry</span>
           </h1>
           <p className="text-xs text-slate-400 mt-1">
-            Manajemen model foundation AI, failover prioritization, circuit breaker, dan API credentials.
+            Manajemen model foundation AI, failover prioritization, live circuit breaker, dan routing credentials.
           </p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={fetchProviders}
+            disabled={isLoading}
             className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+            title="Segarkan Registry"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => {
+              if (activeTab === 'image') {
+                setProviderType('gpt_image_2');
+                setProviderName('GPT-Image-2 (Apimart)');
+                setBaseUrl('https://api.apimart.id/v1');
+                setPriorityInput(1);
+              } else {
+                setProviderType('nvidia_nim');
+                setProviderName('');
+                setBaseUrl('https://integrate.api.nvidia.com/v1');
+                setPriorityInput(1);
+              }
+              setIsModalOpen(true);
+            }}
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white transition shadow-sm"
           >
             <Plus className="w-4 h-4" />
-            <span>Tambah Provider</span>
+            <span>{activeTab === 'llm' ? 'Tambah LLM Provider' : 'Tambah Image Provider'}</span>
           </button>
+        </div>
+      </div>
+
+      {/* Honest Error Banner if backend fails */}
+      {rawBackendError && (
+        <HonestErrorBanner
+          error={rawBackendError}
+          onRetry={fetchProviders}
+          isRetrying={isLoading}
+          title="Kegagalan Koneksi Registry Provider Backend"
+        />
+      )}
+
+      {/* Exclusion & Priority Notice Banner */}
+      <div className="bg-slate-900/90 border border-slate-800 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2.5">
+          <div className="p-1.5 rounded-lg bg-rose-950/80 border border-rose-800 text-rose-300 shrink-0">
+            <AlertOctagon className="w-4 h-4 text-rose-400" />
+          </div>
+          <div>
+            <span className="font-bold text-white">Status Eliminasi Provider:</span>{' '}
+            <span className="text-slate-300">
+              OpenAI DALL-E dan Google Gemini telah dieliminasi permanen dari konfigurasi backend.
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 text-[11px] text-slate-400">
+          <span className="font-mono text-emerald-400 font-semibold">
+            Reasoning: NVIDIA NIM → OpenRouter
+          </span>
+          <span>•</span>
+          <span className="font-mono text-fuchsia-400 font-semibold">
+            Image: GPT-Image-2 → OpenRouter → NVIDIA NIM
+          </span>
         </div>
       </div>
 
@@ -193,7 +351,7 @@ export const LlmProviderManagementScreen: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {llmProviders.map((provider) => (
             <div key={provider.id} className="bg-slate-900/80 border border-slate-800 rounded-xl p-5 space-y-4">
-              <div className="flex items-start justify-between">
+              <div className="flex items-start justify-between gap-2">
                 <div>
                   <h3 className="font-bold text-white text-sm flex items-center gap-2">
                     <span>{provider.name}</span>
@@ -207,7 +365,7 @@ export const LlmProviderManagementScreen: React.FC = () => {
                 </div>
                 <button
                   onClick={() => handleToggleLlm(provider.id, provider.enabled)}
-                  className={`p-1.5 rounded-lg border transition ${
+                  className={`p-1.5 rounded-lg border transition shrink-0 ${
                     provider.enabled
                       ? 'bg-emerald-950/60 border-emerald-800 text-emerald-400 hover:bg-emerald-900/40'
                       : 'bg-slate-800 border-slate-700 text-slate-500 hover:text-slate-300'
@@ -218,6 +376,9 @@ export const LlmProviderManagementScreen: React.FC = () => {
                 </button>
               </div>
 
+              {/* Priority Badge */}
+              <div>{getPriorityBadge(provider.fallbackPriority, 'llm')}</div>
+
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between py-1 border-t border-slate-800/60 text-slate-400">
                   <span>Prioritas Failover:</span>
@@ -225,7 +386,9 @@ export const LlmProviderManagementScreen: React.FC = () => {
                 </div>
                 <div className="flex justify-between py-1 border-t border-slate-800/60 text-slate-400">
                   <span>Spesialisasi Task:</span>
-                  <span className="font-semibold text-emerald-400">{provider.taskSpecialization || 'General Purpose'}</span>
+                  <span className="font-semibold text-emerald-400">
+                    {provider.taskSpecialization || 'High-Throughput Reasoning'}
+                  </span>
                 </div>
                 <div className="flex justify-between py-1 border-t border-slate-800/60 text-slate-400">
                   <span>Status Sirkuit:</span>
@@ -244,7 +407,9 @@ export const LlmProviderManagementScreen: React.FC = () => {
                   >
                     <Layers className="w-3.5 h-3.5" />
                     <span>
-                      {expandedProviderId === provider.id ? 'Tutup Model Catalog' : `Lihat Live Models (${provider.models?.length ?? 0})`}
+                      {expandedProviderId === provider.id
+                        ? 'Tutup Model Catalog'
+                        : `Lihat Live Models (${provider.models?.length ?? 0})`}
                     </span>
                     {expandedProviderId === provider.id ? (
                       <ChevronUp className="w-3 h-3" />
@@ -323,15 +488,22 @@ export const LlmProviderManagementScreen: React.FC = () => {
                     {provider.providerType}
                   </span>
                 </div>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800">
-                  Pri: #{provider.priority}
-                </span>
+                <button
+                  onClick={() => handleDeleteImage(provider.id)}
+                  className="p-1 text-slate-500 hover:text-rose-400 transition"
+                  title="Hapus Image Provider"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
-              <div className="text-xs text-slate-400">
-                <p className="font-semibold text-slate-300 mb-1">Model Terdaftar:</p>
+
+              <div>{getPriorityBadge(provider.priority, 'image')}</div>
+
+              <div className="text-xs text-slate-400 space-y-1 border-t border-slate-800/60 pt-3">
+                <p className="font-semibold text-slate-300 mb-1">Model Image Terdaftar:</p>
                 <div className="flex flex-wrap gap-1">
                   {provider.models?.map((m, idx) => (
-                    <span key={idx} className="px-2 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300">
+                    <span key={idx} className="px-2 py-0.5 rounded bg-slate-800 text-[10px] text-slate-300 font-mono">
                       {m}
                     </span>
                   ))}
@@ -342,15 +514,20 @@ export const LlmProviderManagementScreen: React.FC = () => {
         </div>
       )}
 
-      {/* Modal Add Provider */}
+      {/* Modal Add Provider - STRICTLY NO OpenAI or Google Gemini */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 space-y-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 space-y-4 shadow-2xl">
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <Cpu className="w-5 h-5 text-emerald-400" />
-              <span>Registrasi LLM Provider Baru</span>
+              <span>
+                {activeTab === 'llm'
+                  ? 'Registrasi LLM Reasoning Provider'
+                  : 'Registrasi Image Generation Provider'}
+              </span>
             </h3>
-            <form onSubmit={handleCreateLlm} className="space-y-4">
+
+            <form onSubmit={handleCreateProvider} className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">Nama Provider</label>
                 <input
@@ -358,44 +535,125 @@ export const LlmProviderManagementScreen: React.FC = () => {
                   required
                   value={providerName}
                   onChange={(e) => setProviderName(e.target.value)}
-                  placeholder="Contoh: NVIDIA NIM Production Cluster"
+                  placeholder={
+                    activeTab === 'llm'
+                      ? 'Contoh: NVIDIA NIM Production Cluster'
+                      : 'Contoh: GPT-Image-2 Apimart Cluster'
+                  }
                   className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-emerald-500"
                 />
               </div>
+
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">Tipe Provider</label>
-                <select
-                  value={providerType}
-                  onChange={(e) => setProviderType(e.target.value)}
-                  className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-emerald-500"
-                >
-                  <option value="nvidia_nim">NVIDIA NIM (meta/llama-3.1-70b-instruct, mistralai/mixtral-8x22b, etc.)</option>
-                  <option value="gemini">Google Gemini (1.5 Flash, 1.5 Pro)</option>
-                  <option value="openai">OpenAI (GPT-4o, o1-preview, etc.)</option>
-                  <option value="groq">Groq LPU (Ultra-Low Latency Inference)</option>
-                  <option value="custom_ollama">Self-Hosted Ollama / vLLM (Private GPU)</option>
-                </select>
+                {activeTab === 'llm' ? (
+                  <select
+                    value={providerType}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setProviderType(val);
+                      if (val === 'nvidia_nim') {
+                        setBaseUrl('https://integrate.api.nvidia.com/v1');
+                        setPriorityInput(1);
+                      } else if (val === 'openrouter') {
+                        setBaseUrl('https://openrouter.ai/api/v1');
+                        setPriorityInput(2);
+                      } else {
+                        setBaseUrl('');
+                        setPriorityInput(3);
+                      }
+                    }}
+                    className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="nvidia_nim">
+                      NVIDIA NIM (Prioritas 1: meta/llama-3.1-70b-instruct, mistralai/mixtral-8x22b)
+                    </option>
+                    <option value="openrouter">
+                      OpenRouter (Prioritas 2: Anthropic Claude 3.5, DeepSeek Chat, Meta 405B)
+                    </option>
+                    <option value="groq">Groq LPU (Ultra-Low Latency Inference)</option>
+                    <option value="custom_ollama">Self-Hosted Ollama / vLLM (Private GPU)</option>
+                  </select>
+                ) : (
+                  <select
+                    value={providerType}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setProviderType(val);
+                      if (val === 'gpt_image_2') {
+                        setBaseUrl('https://api.apimart.id/v1');
+                        setPriorityInput(1);
+                      } else if (val === 'openrouter') {
+                        setBaseUrl('https://openrouter.ai/api/v1');
+                        setPriorityInput(2);
+                      } else {
+                        setBaseUrl('https://integrate.api.nvidia.com/v1');
+                        setPriorityInput(3);
+                      }
+                    }}
+                    className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="gpt_image_2">GPT-Image-2 (Apimart - Prioritas 1 Primary)</option>
+                    <option value="openrouter">OpenRouter Image Gateway (Prioritas 2 Fallback)</option>
+                    <option value="nvidia_nim">NVIDIA NIM Visual AI (Prioritas 3 Fallback)</option>
+                  </select>
+                )}
               </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Urutan Prioritas Fallback
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={priorityInput}
+                    onChange={(e) => setPriorityInput(parseInt(e.target.value, 10) || 1)}
+                    className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">
+                    Model IDs (koma terpisah)
+                  </label>
+                  <input
+                    type="text"
+                    value={modelsInput}
+                    onChange={(e) => setModelsInput(e.target.value)}
+                    placeholder="model-1, model-2"
+                    className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+              </div>
+
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Base URL (Opsional jika standard)</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  Base URL (Opsional jika standard)
+                </label>
                 <input
                   type="text"
                   value={baseUrl}
                   onChange={(e) => setBaseUrl(e.target.value)}
-                  placeholder="https://api.openai.com/v1"
+                  placeholder="https://integrate.api.nvidia.com/v1"
                   className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-emerald-500"
                 />
               </div>
+
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">API Key (Securely Encrypted)</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  API Key (Enkripsi Kriptografis)
+                </label>
                 <input
                   type="password"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="sk-..."
+                  placeholder="nvapi-..."
                   className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-emerald-500"
                 />
               </div>
+
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
@@ -419,3 +677,4 @@ export const LlmProviderManagementScreen: React.FC = () => {
     </div>
   );
 };
+export default LlmProviderManagementScreen;
