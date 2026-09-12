@@ -22,13 +22,56 @@ const getBaseUrl = (): string => {
 };
 
 /**
+ * Helper to read Super Admin session token from secure cookie
+ */
+const getAdminTokenFromCookie = (): string | null => {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(/(?:^|;\s*)orchestree_admin_token=([^;]*)/);
+  return match && match[1] ? decodeURIComponent(match[1]) : null;
+};
+
+/**
  * Centralized API Client according to Phase 121/139 architecture specification.
  * Enforces unified NEXT_PUBLIC_BACKEND_API_URL and standard authentication headers.
  */
 export const apiClient = {
   baseUrl: getBaseUrl(),
 
+  /**
+   * BUG 1 FIX: Method khusus untuk mengambil token Super Admin yang tersimpan.
+   * Dipakai khusus di context Super Admin Dashboard agar tidak ada ambiguitas token mana yang aktif.
+   */
+  getSuperAdminToken(): string | null {
+    // 1. In-memory ApiClient token
+    const memToken = api.getToken();
+    if (memToken) return memToken;
+
+    // 2. Secure cookie token
+    const cookieToken = getAdminTokenFromCookie();
+    if (cookieToken) return cookieToken;
+
+    // 3. SessionStorage fallback
+    if (typeof sessionStorage !== 'undefined') {
+      const stored = sessionStorage.getItem('orchestree_superadmin_token');
+      if (stored) return stored;
+    }
+
+    return null;
+  },
+
+  /**
+   * BUG 1 FIX: Prioritaskan token Super Admin tersimpan (api.getToken() / cookie)
+   * TERLEBIH DAHULU ketimbang sesi Supabase. Alur Super Admin TIDAK login lewat Supabase Auth,
+   * melainkan lewat endpoint backend khusus Super Admin.
+   */
   async getSessionToken(): Promise<string | null> {
+    // 1. PRIORITAS UTAMA: Token Super Admin (Dedicated Backend Auth)
+    const superAdminToken = this.getSuperAdminToken();
+    if (superAdminToken) {
+      return superAdminToken;
+    }
+
+    // 2. Fallback ke Supabase session (jika ada sesi pengguna consumer)
     try {
       const { data } = await supabase.auth.getSession();
       if (data?.session?.access_token) {
@@ -37,14 +80,27 @@ export const apiClient = {
     } catch {
       // Session lookup fallback
     }
-    // Check cookie / api client token
-    return api.getToken();
+
+    return null;
   },
 
   async request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const token = await this.getSessionToken();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      // =========================================================================
+      // SECURITY AUDIT NOTE (BUG 4):
+      // Header 'X-Admin-Role: SUPER_ADMIN' dikirim HANYA untuk keperluan
+      // logging, request tracing, dan debugging di sisi server.
+      // INI BUKAN MEKANISME OTORISASI!
+      //
+      // PERHATIAN UNTUK TIM BACKEND:
+      // Wajib audit fungsi enforceSuperAdmin() / guard di backend. Pastikan role
+      // SUPER_ADMIN ditentukan murni dan divalidasi secara kriptografis dari klaim
+      // di dalam JWT token (req.user.role === 'SUPER_ADMIN'), BUKAN membaca dari
+      // header ini. Siapa pun dapat mereproduksi header ini via curl/DevTools tanpa
+      // token asli, sehingga mengandalkan header ini untuk otorisasi adalah cacat keamanan kritis.
+      // =========================================================================
       'X-Admin-Role': 'SUPER_ADMIN',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers as Record<string, string> || {}),
@@ -100,6 +156,20 @@ export const apiClient = {
 
   async delete<T>(path: string, options?: RequestInit): Promise<T> {
     return this.request<T>(path, { ...options, method: 'DELETE' });
+  },
+
+  /**
+   * Super Admin Login via backend authentication endpoint
+   */
+  async adminLogin(email: string, pass: string) {
+    return api.adminLogin(email, pass);
+  },
+
+  /**
+   * Super Admin TOTP MFA verification via backend
+   */
+  async adminVerifyMfa(email: string, code: string, challengeToken?: string) {
+    return api.adminVerifyMfa(email, code, challengeToken);
   },
 };
 

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback, ReactNode } from 'react';
 import { AdminUserProfile } from '../types';
 import { api } from '../lib/api';
+import { apiClient } from '../lib/apiClient';
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 
 // Fase 124 / Bagian A.1.2: Super Admin 15-Minute Idle Timeout (Strict 15 minutes)
@@ -119,9 +120,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     // Remove secure session cookies
     removeSessionCookie('orchestree_admin_session');
+    removeSessionCookie('orchestree_admin_token');
     removeSessionCookie('orchestree_admin_last_activity');
 
-    // Clean up any legacy localStorage remnants if present
+    // Clean up sessionStorage & any legacy localStorage remnants
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem('orchestree_superadmin_token');
+      sessionStorage.removeItem('orchestree_superadmin_user');
+    }
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem('orchestree_superadmin_token');
       localStorage.removeItem('orchestree_superadmin_user');
@@ -141,7 +147,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [user]);
 
-  // Session verification on mount — Real Supabase Session Check
+  // Session verification on mount — Checks Super Admin Token & Real Supabase Session
   useEffect(() => {
     const checkActiveSession = async () => {
       setIsLoading(true);
@@ -166,7 +172,42 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           return;
         }
 
-        // Verify genuine Supabase session
+        // BUG 1 FIX: Prioritaskan verifikasi token Super Admin dari backend login terlebih dahulu
+        const superAdminToken = apiClient.getSuperAdminToken();
+        const activeCookie = getSessionCookie('orchestree_admin_session');
+        let restoredUser: AdminUserProfile | null = null;
+        if (typeof sessionStorage !== 'undefined') {
+          const raw = sessionStorage.getItem('orchestree_superadmin_user');
+          if (raw) {
+            try {
+              restoredUser = JSON.parse(raw);
+            } catch {}
+          }
+        }
+
+        if (superAdminToken && (activeCookie === 'active' || restoredUser)) {
+          const userObj: AdminUserProfile = restoredUser || {
+            id: 'admin-restored',
+            email: 'superadmin@orchestree.ai',
+            role: 'SUPER_ADMIN',
+            tenantId: 'system-platform',
+            isMfaVerified: true,
+            fullName: 'Platform Super Administrator',
+          };
+          setUser(userObj);
+          setToken(superAdminToken);
+          api.setToken(superAdminToken);
+          api.setOperatorId(userObj.email);
+          lastActivityRef.current = Date.now();
+          setSessionCookie('orchestree_admin_session', 'active', 15 * 60);
+          setSessionCookie('orchestree_admin_token', superAdminToken, 15 * 60);
+          setSessionCookie('orchestree_admin_last_activity', Date.now().toString(), 15 * 60);
+          api.initCsrf().catch((e) => console.warn('CSRF init deferred:', e));
+          setIsLoading(false);
+          return;
+        }
+
+        // Fallback: Verify genuine Supabase session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
         if (sessionError || !session || !session.user) {
@@ -531,8 +572,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (!sessionToken && tempCredentials.challengeToken) {
         try {
           const backendRes = await api.adminVerifyMfa(tempCredentials.email, cleanCode, tempCredentials.challengeToken);
-          sessionToken = backendRes.accessToken;
-          superAdminUser = backendRes.user;
+          sessionToken = backendRes.accessToken || backendRes.token || '';
+          if (backendRes.user) {
+            superAdminUser = backendRes.user;
+          } else if (sessionToken) {
+            superAdminUser = {
+              id: 'admin-' + tempCredentials.email.replace(/[^a-zA-Z0-9]/g, '-'),
+              email: tempCredentials.email,
+              role: (backendRes.role as any) || 'SUPER_ADMIN',
+              tenantId: 'system-platform',
+              isMfaVerified: true,
+              fullName: 'Platform Super Administrator',
+            };
+          }
         } catch (beErr: any) {
           throw new Error(beErr.message || 'Kode verifikasi MFA TOTP tidak valid.');
         }
@@ -562,9 +614,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       api.setToken(sessionToken);
       api.setOperatorId(superAdminUser.email);
 
-      // Store in Secure Cookie (NOT in localStorage — Fase 124 Bagian C)
+      // Store in Secure Cookie & SessionStorage (BUG 1 FIX)
       setSessionCookie('orchestree_admin_session', 'active', 15 * 60);
+      setSessionCookie('orchestree_admin_token', sessionToken, 15 * 60);
       setSessionCookie('orchestree_admin_last_activity', now.toString(), 15 * 60);
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('orchestree_superadmin_token', sessionToken);
+        sessionStorage.setItem('orchestree_superadmin_user', JSON.stringify(superAdminUser));
+      }
 
       setMfaPending(false);
       setTempCredentials(null);

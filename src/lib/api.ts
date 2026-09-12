@@ -48,6 +48,7 @@ import {
   ProspectAnalyticsResponse,
   SupportImpersonationSession,
   IpAllowlistConfig,
+  AdminAuthResponse,
 } from '../types';
 import { supabase } from './supabaseClient';
 
@@ -76,6 +77,34 @@ const resolveApiBaseUrl = (): string => {
 };
 
 const API_BASE_URL = resolveApiBaseUrl();
+
+// =============================================================================
+// BUG 1 COORDINATION NOTE: Super Admin Auth Endpoints
+// Default path configured: /admin/auth/login and /admin/auth/verify-mfa.
+// Jika tim backend mengonfirmasi path aktual endpoint login Super Admin
+// (misal /admin/login atau /auth/admin/login), sesuaikan via environment variable
+// VITE_ADMIN_LOGIN_PATH atau update konstanta di bawah ini agar PERSIS SAMA.
+// =============================================================================
+export const ADMIN_AUTH_LOGIN_PATH = (
+  (typeof import.meta !== 'undefined' && (import.meta.env as any)?.VITE_ADMIN_LOGIN_PATH) ||
+  '/admin/auth/login'
+);
+export const ADMIN_AUTH_VERIFY_MFA_PATH = (
+  (typeof import.meta !== 'undefined' && (import.meta.env as any)?.VITE_ADMIN_VERIFY_MFA_PATH) ||
+  '/admin/auth/verify-mfa'
+);
+
+export const resolveEndpointUrl = (path: string): string => {
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  if (cleanPath.startsWith('/api/v1/')) {
+    const rootUrl = API_BASE_URL.replace(/\/api\/v1$/, '');
+    return `${rootUrl}${cleanPath}`;
+  }
+  return `${API_BASE_URL}${cleanPath}`;
+};
 
 export const LOCAL_STORAGE_PLANS_KEY = 'orchestree_synced_commercial_plans';
 export const LOCAL_STORAGE_PLANS_SYNCED_AT_KEY = 'orchestree_pricing_synced_at';
@@ -412,6 +441,19 @@ export class ApiClient {
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      // =========================================================================
+      // SECURITY AUDIT NOTE (BUG 4):
+      // Header 'X-Admin-Role: SUPER_ADMIN' dikirim HANYA untuk keperluan
+      // logging, request tracing, dan debugging di sisi server.
+      // INI BUKAN MEKANISME OTORISASI!
+      //
+      // PERHATIAN UNTUK TIM BACKEND:
+      // Wajib audit fungsi enforceSuperAdmin() / guard di backend. Pastikan role
+      // SUPER_ADMIN ditentukan murni dan divalidasi secara kriptografis dari klaim
+      // di dalam JWT token (req.user.role === 'SUPER_ADMIN'), BUKAN membaca dari
+      // header ini. Siapa pun dapat mereproduksi header ini via curl/DevTools tanpa
+      // token asli, sehingga mengandalkan header ini untuk otorisasi adalah cacat keamanan kritis.
+      // =========================================================================
       'X-Admin-Role': 'SUPER_ADMIN',
       'X-Operator-Id': this.operatorId,
       ...(options.headers as Record<string, string> || {}),
@@ -2290,18 +2332,20 @@ export class ApiClient {
   // ===========================================================================
   // FASE 124 / BAGIAN A & E: SUPER ADMIN AUTH & LOCKOUT
   // ===========================================================================
-  async adminLogin(email: string, pass: string): Promise<{ mfaRequired: boolean; challengeToken: string; message: string }> {
-    const res = await fetch(`${API_BASE_URL}/admin/auth/login`, {
+  async adminLogin(email: string, pass: string): Promise<AdminAuthResponse> {
+    const loginEndpoint = resolveEndpointUrl(ADMIN_AUTH_LOGIN_PATH);
+    const res = await fetch(loginEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        // Catatan Audit Keamanan: Header X-Admin-Role hanya untuk server diagnostic logging, BUKAN otorisasi
         'X-Admin-Role': 'SUPER_ADMIN',
       },
       body: JSON.stringify({ email, password: pass }),
     });
 
     if (res.status === 429) {
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       throw new Error(data.error || 'Akun terkunci selama 15 menit karena gagal login 3 kali.');
     }
 
@@ -2310,19 +2354,30 @@ export class ApiClient {
       throw new Error(data.error || `Login gagal: [${res.status}]`);
     }
 
-    return res.json();
+    const authData: AdminAuthResponse = await res.json();
+
+    // Simpan token langsung jika endpoint backend mengembalikan token aktif (mis. direct login tanpa MFA)
+    const effectiveToken = authData.token || authData.accessToken;
+    if (effectiveToken) {
+      this.setToken(effectiveToken);
+      if (typeof document !== 'undefined') {
+        document.cookie = `orchestree_admin_token=${encodeURIComponent(effectiveToken)}; path=/; max-age=900; SameSite=Strict`;
+      }
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('orchestree_superadmin_token', effectiveToken);
+      }
+    }
+
+    return authData;
   }
 
-  async adminVerifyMfa(email: string, code: string, challengeToken?: string): Promise<{
-    accessToken: string;
-    expiresInSeconds: number;
-    csrfToken: string;
-    user: any;
-  }> {
-    const res = await fetch(`${API_BASE_URL}/admin/auth/verify-mfa`, {
+  async adminVerifyMfa(email: string, code: string, challengeToken?: string): Promise<AdminAuthResponse> {
+    const verifyEndpoint = resolveEndpointUrl(ADMIN_AUTH_VERIFY_MFA_PATH);
+    const res = await fetch(verifyEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        // Catatan Audit Keamanan: Header X-Admin-Role hanya untuk server diagnostic logging, BUKAN otorisasi
         'X-Admin-Role': 'SUPER_ADMIN',
       },
       body: JSON.stringify({ email, code, challengeToken }),
@@ -2333,9 +2388,19 @@ export class ApiClient {
       throw new Error(data.error || 'Verifikasi MFA gagal.');
     }
 
-    const data = await res.json();
+    const data: AdminAuthResponse = await res.json();
     if (data.csrfToken) {
       this.setCsrfToken(data.csrfToken);
+    }
+    const effectiveToken = data.accessToken || data.token;
+    if (effectiveToken) {
+      this.setToken(effectiveToken);
+      if (typeof document !== 'undefined') {
+        document.cookie = `orchestree_admin_token=${encodeURIComponent(effectiveToken)}; path=/; max-age=900; SameSite=Strict`;
+      }
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('orchestree_superadmin_token', effectiveToken);
+      }
     }
     return data;
   }

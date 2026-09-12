@@ -96,3 +96,4 @@ echo ">>> Menunggu rollout status selesai <<<"
 kubectl rollout status deployment/admin-dashboard -n "${NAMESPACE}" --timeout=180s
 
 echo "✅ Rollout selesai dengan sukses!"
+

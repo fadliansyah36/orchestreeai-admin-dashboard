@@ -11,6 +11,19 @@ export interface AdminUserProfile {
   fullName: string;
 }
 
+export interface AdminAuthResponse {
+  token?: string;
+  accessToken?: string;
+  role?: string;
+  isMfaVerified?: boolean;
+  user?: AdminUserProfile;
+  mfaRequired?: boolean;
+  challengeToken?: string;
+  message?: string;
+  expiresInSeconds?: number;
+  csrfToken?: string;
+}
+
 export interface TenantItem {
   id: string;
   name: string;
