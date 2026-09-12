@@ -183,6 +183,8 @@ export interface SystemMonitoringOverview {
     status: 'CLOSED' | 'HALF_OPEN' | 'OPEN' | string;
     failureRate: number;
     latencyMs: number;
+    priority?: number;
+    role?: string;
   }>;
   dlqCount: number;
   securityGatesPassed: boolean;
@@ -270,12 +272,29 @@ export interface DeadLetterRecord {
   reprocessResult: string;
 }
 
+export interface LlmUsageLogItem {
+  id: string;
+  tenantId: string;
+  provider: string;
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  costUsd: number;
+  durationMs?: number;
+  createdAt: string;
+  statusCode?: number;
+  status?: string;
+  error?: string;
+}
+
 export interface WorkflowExecutionSummary {
   id: string;
   executionId: string;
   workflowName: string;
   workflowDefId: string;
   tenantId: string;
+  tenantName?: string;
   status: 'COMPLETED' | 'FAILED' | 'RUNNING' | 'PENDING' | string;
   executionStatus: string;
   startTime: number | string;
@@ -284,6 +303,12 @@ export interface WorkflowExecutionSummary {
   nodeCount: number;
   lastCompletedNodeId: string;
   triggerType: string;
+  workflow_name?: string;
+  tenant_id?: string;
+  tenant_name?: string;
+  trigger_type?: string;
+  duration_ms?: number;
+  created_at?: string | number;
 }
 
 export interface WorkflowReplayResult {

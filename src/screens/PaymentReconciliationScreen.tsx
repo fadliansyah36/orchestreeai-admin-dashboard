@@ -29,6 +29,7 @@ import {
   PaymentReconciliationQueueItem,
   ConfirmPaymentReconciliationResult,
 } from '../types';
+import { HonestErrorBanner, HonestErrorInfo } from '../components/HonestErrorBanner';
 
 export type ReconciliationTab = 'paid' | 'pending' | 'review';
 
@@ -76,6 +77,7 @@ export const PaymentReconciliationScreen: React.FC = () => {
   } | null>(null);
 
   const [actionError, setActionError] = useState<string | null>(null);
+  const [backendError, setBackendError] = useState<HonestErrorInfo | null>(null);
 
   // ---------------------------------------------------------------------------
   // Data Fetching
@@ -86,27 +88,26 @@ export const PaymentReconciliationScreen: React.FC = () => {
     setActionError(null);
 
     try {
+      setBackendError(null);
       const [paidRes, pendingRes, queueRes] = await Promise.all([
-        api.getReconciliationOrders('paid').catch((e) => {
-          console.error('Failed fetching paid orders:', e);
-          return [] as ReconciliationOrderDto[];
-        }),
-        api.getReconciliationOrders('pending_payment').catch((e) => {
-          console.error('Failed fetching pending orders:', e);
-          return [] as ReconciliationOrderDto[];
-        }),
-        api.getReconciliationQueue('all').catch((e) => {
-          console.error('Failed fetching queue items:', e);
-          return [] as PaymentReconciliationQueueItem[];
-        }),
+        api.getReconciliationOrders('paid'),
+        api.getReconciliationOrders('pending_payment'),
+        api.getReconciliationQueue('all'),
       ]);
 
-      setPaidOrders(paidRes);
-      setPendingOrders(pendingRes);
-      setQueueItems(queueRes);
+      setPaidOrders(paidRes || []);
+      setPendingOrders(pendingRes || []);
+      setQueueItems(queueRes || []);
       setLastUpdated(new Date());
     } catch (err: any) {
       console.error('Error fetching reconciliation data', err);
+      setBackendError({
+        endpoint: '/admin/reconciliation/orders & /admin/reconciliation/queue',
+        status: err?.status || err?.statusCode || 500,
+        message: err?.message || 'Gagal memuat data rekonsiliasi pembayaran dari backend.',
+        rawDetails: err?.rawDetails || err?.stack || err?.toString(),
+        timestamp: new Date().toLocaleTimeString(),
+      });
       setActionError(err.message || 'Gagal memuat data rekonsiliasi pembayaran');
     } finally {
       setIsLoading(false);
@@ -413,9 +414,21 @@ export const PaymentReconciliationScreen: React.FC = () => {
       </div>
 
       {/* ------------------------------------------------------------------- */}
+      {/* Honest Error Banner (Super Admin Backend Diagnostics)               */}
+      {/* ------------------------------------------------------------------- */}
+      {backendError && (
+        <HonestErrorBanner
+          error={backendError}
+          onRetry={() => fetchData(false)}
+          isRetrying={isLoading || isRefreshing}
+          title="Status Endpoint Rekonsiliasi (/admin/reconciliation)"
+        />
+      )}
+
+      {/* ------------------------------------------------------------------- */}
       {/* Action Error Banner                                                 */}
       {/* ------------------------------------------------------------------- */}
-      {actionError && (
+      {actionError && !backendError && (
         <div className="bg-rose-950/40 border border-rose-800/80 text-rose-300 p-4 rounded-xl flex items-center justify-between text-sm">
           <div className="flex items-center space-x-3">
             <AlertOctagon className="w-5 h-5 text-rose-400 shrink-0" />

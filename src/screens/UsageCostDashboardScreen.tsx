@@ -43,7 +43,7 @@ export const UsageCostDashboardScreen: React.FC = () => {
         message:
           err?.message ||
           'Gagal memuat analitik penggunaan token dari backend. Respon tidak valid atau koneksi ditolak.',
-        rawDetails: err?.stack || err?.toString(),
+        rawDetails: err?.rawDetails || err?.stack || err?.toString(),
         timestamp: new Date().toLocaleTimeString(),
       });
     } finally {

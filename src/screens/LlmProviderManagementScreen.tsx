@@ -82,10 +82,13 @@ export const LlmProviderManagementScreen: React.FC = () => {
         message:
           err?.message ||
           'Gagal mengambil konfigurasi provider LLM/Image dari backend server.',
-        rawDetails: err?.stack || err?.toString(),
+        rawDetails: err?.rawDetails || err?.stack || err?.toString(),
         timestamp: new Date().toLocaleTimeString(),
       });
-      setMessage({ type: 'error', text: err?.message || 'Gagal memuat data provider.' });
+      setMessage({ type: 'error', text: err?.message || 'Gagal memuat data provider dari backend.' });
+      // Provide fallback configuration with updated priority chain so UI remains inspectable
+      setLlmProviders(api.getDefaultLlmProviders());
+      setImageProviders(api.getDefaultImageProviders());
     } finally {
       setIsLoading(false);
     }

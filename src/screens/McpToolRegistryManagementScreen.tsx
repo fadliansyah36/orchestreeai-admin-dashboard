@@ -9,21 +9,40 @@ import {
   Lock,
   Code2,
   CheckCircle2,
+  X,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { McpToolItem } from '../types';
+import { HonestErrorBanner, HonestErrorInfo } from '../components/HonestErrorBanner';
 
 export const McpToolRegistryManagementScreen: React.FC = () => {
   const [tools, setTools] = useState<McpToolItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [backendError, setBackendError] = useState<HonestErrorInfo | null>(null);
+
+  // Create Modal State
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [name, setName] = useState<string>('');
+  const [description, setDescription] = useState<string>('');
+  const [riskLevel, setRiskLevel] = useState<'LOW' | 'MEDIUM' | 'HIGH'>('LOW');
+  const [operationMode, setOperationMode] = useState<string>('ANY_SANDBOX');
+  const [requiredRole, setRequiredRole] = useState<string>('AGENT_ROLE');
 
   const fetchTools = async () => {
     setIsLoading(true);
+    setBackendError(null);
     try {
       const data = await api.getMcpTools();
       setTools(data);
     } catch (err: any) {
+      setBackendError({
+        endpoint: '/admin/mcp-tools',
+        status: err?.status || 500,
+        message: err?.message || 'Gagal memuat registry MCP Tool.',
+        rawDetails: err?.rawDetails || err,
+      });
       setMessage({ type: 'error', text: err?.message || 'Gagal memuat registry MCP Tool.' });
     } finally {
       setIsLoading(false);
@@ -33,6 +52,51 @@ export const McpToolRegistryManagementScreen: React.FC = () => {
   useEffect(() => {
     fetchTools();
   }, []);
+
+  const handleCreateTool = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    setIsSubmitting(true);
+    try {
+      await api.createMcpTool({
+        name: name.trim(),
+        description: description.trim() || 'MCP Tool Sandbox Agent Service',
+        riskLevel,
+        restrictedToOperationMode: operationMode,
+        requiredRole,
+      });
+      setMessage({ type: 'success', text: `Tool "${name}" berhasil didaftarkan.` });
+      setIsModalOpen(false);
+      setName('');
+      setDescription('');
+      fetchTools();
+    } catch (err: any) {
+      setBackendError({
+        endpoint: '/admin/mcp-tools',
+        status: err?.status || 500,
+        message: err?.message || 'Gagal mendaftarkan MCP tool.',
+        rawDetails: err?.rawDetails || err,
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteTool = async (tool: McpToolItem) => {
+    if (!window.confirm(`Yakin ingin menghapus tool "${tool.name}"?`)) return;
+    try {
+      await api.deleteMcpTool(tool.id);
+      setMessage({ type: 'success', text: `Tool "${tool.name}" berhasil dihapus.` });
+      fetchTools();
+    } catch (err: any) {
+      setBackendError({
+        endpoint: `/admin/mcp-tools/${tool.id}`,
+        status: err?.status || 500,
+        message: err?.message || 'Gagal menghapus MCP tool.',
+        rawDetails: err?.rawDetails || err,
+      });
+    }
+  };
 
   const handleToggleKillSwitch = async (tool: McpToolItem) => {
     const nextState = !tool.killSwitchActive;
@@ -44,7 +108,12 @@ export const McpToolRegistryManagementScreen: React.FC = () => {
       });
       fetchTools();
     } catch (err: any) {
-      setMessage({ type: 'error', text: err?.message || 'Gagal mengubah status kill switch.' });
+      setBackendError({
+        endpoint: `/admin/mcp-tools/${tool.id}/kill-switch`,
+        status: err?.status || 500,
+        message: err?.message || 'Gagal mengubah status kill switch.',
+        rawDetails: err?.rawDetails || err,
+      });
     }
   };
 
@@ -60,13 +129,26 @@ export const McpToolRegistryManagementScreen: React.FC = () => {
             Sandbox eksekusi tools autonomous AI agents, fail-closed guardrails, dan emergency global kill switches.
           </p>
         </div>
-        <button
-          onClick={fetchTools}
-          className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition self-start sm:self-auto"
-        >
-          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={fetchTools}
+            className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition self-start sm:self-auto"
+            title="Refresh"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-xs font-semibold text-white transition shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Daftarkan MCP Tool</span>
+          </button>
+        </div>
       </div>
+
+      {/* Honest Backend Error Banner */}
+      <HonestErrorBanner error={backendError} onRetry={fetchTools} isRetrying={isLoading} />
 
       {message && (
         <div
@@ -111,6 +193,13 @@ export const McpToolRegistryManagementScreen: React.FC = () => {
                   </h3>
                   <p className="text-xs text-slate-400 mt-1 line-clamp-2">{tool.description}</p>
                 </div>
+                <button
+                  onClick={() => handleDeleteTool(tool)}
+                  className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition"
+                  title="Hapus MCP Tool"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
 
               <div className="space-y-1.5 text-xs text-slate-400 border-t border-slate-800/60 pt-3">
@@ -150,6 +239,99 @@ export const McpToolRegistryManagementScreen: React.FC = () => {
           );
         })}
       </div>
+
+      {/* Modal Daftarkan MCP Tool Baru */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Wrench className="w-4 h-4 text-amber-400" />
+                <span>Daftarkan MCP Tool Baru</span>
+              </h3>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleCreateTool} className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Nama Tool / MCP Identifier</label>
+                <input
+                  type="text"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Contoh: sap_connector_query, erp_inventory_sync"
+                  className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-amber-500 font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Deskripsi Fungsional</label>
+                <textarea
+                  rows={2}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Deskripsikan kapabilitas sandbox dan batasan akses tool"
+                  className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Risk Level</label>
+                  <select
+                    value={riskLevel}
+                    onChange={(e) => setRiskLevel(e.target.value as any)}
+                    className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-amber-500"
+                  >
+                    <option value="LOW">LOW</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="HIGH">HIGH</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Required Role</label>
+                  <input
+                    type="text"
+                    value={requiredRole}
+                    onChange={(e) => setRequiredRole(e.target.value)}
+                    placeholder="AGENT_ROLE"
+                    className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-amber-500 font-mono"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Operation Mode Restriction</label>
+                <input
+                  type="text"
+                  value={operationMode}
+                  onChange={(e) => setOperationMode(e.target.value)}
+                  placeholder="ANY_SANDBOX, STRICT_CONTAINER, READ_ONLY"
+                  className="w-full px-3 py-2 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-amber-500 font-mono"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-3 py-1.5 text-xs text-slate-400 hover:text-white transition"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-4 py-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-500 rounded-lg transition disabled:opacity-50"
+                >
+                  {isSubmitting ? 'Mendaftarkan...' : 'Simpan MCP Tool'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

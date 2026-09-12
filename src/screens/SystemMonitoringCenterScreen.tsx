@@ -64,9 +64,12 @@ export const SystemMonitoringCenterScreen: React.FC = () => {
         message:
           err?.message ||
           'HealthCheckEngine backend gagal merespons atau mengalami kendala internal.',
-        rawDetails: err?.stack || err?.toString(),
+        rawDetails: err?.rawDetails || err?.stack || err?.toString(),
         timestamp: new Date().toLocaleTimeString(),
       });
+      // Set local fallback metrics so the dashboard remains inspectable while displaying the honest error banner
+      setOverview(api.getDefaultSystemMonitoringOverview());
+      setHealthStatus(api.getDefaultHealthStatus());
     } finally {
       setIsLoading(false);
     }

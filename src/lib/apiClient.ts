@@ -3,10 +3,15 @@ import { supabase } from './supabaseClient';
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  endpoint?: string;
+  rawDetails?: any;
+
+  constructor(status: number, message: string, endpoint?: string, rawDetails?: any) {
     super(message || `API Request failed with status ${status}`);
     this.name = 'ApiError';
     this.status = status;
+    this.endpoint = endpoint;
+    this.rawDetails = rawDetails;
   }
 }
 
@@ -120,13 +125,27 @@ export const apiClient = {
       headers,
     });
 
-    if (res.status === 401 || res.status === 403) {
-      throw new ApiError(res.status, `Unauthorized or Forbidden access [${res.status}] to ${cleanPath}`);
-    }
-
     if (!res.ok) {
-      const errorText = await res.text();
-      throw new ApiError(res.status, errorText || `API Error ${res.status}`);
+      let rawText = '';
+      try {
+        rawText = await res.text();
+      } catch {}
+
+      let parsedMessage = rawText;
+      let rawDetails: any = rawText;
+      try {
+        const parsed = JSON.parse(rawText);
+        rawDetails = parsed;
+        if (parsed.error) parsedMessage = typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error);
+        else if (parsed.message) parsedMessage = parsed.message;
+        else if (parsed.status === 'error') parsedMessage = JSON.stringify(parsed);
+      } catch {}
+
+      const finalMessage = parsedMessage && parsedMessage.trim().length > 0
+        ? parsedMessage
+        : `Backend returned HTTP ${res.status} for ${cleanPath}`;
+
+      throw new ApiError(res.status, finalMessage, cleanPath, rawDetails);
     }
 
     return res.json() as Promise<T>;

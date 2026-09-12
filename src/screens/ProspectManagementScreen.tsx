@@ -12,16 +12,19 @@ import {
   Search,
   Filter,
   X,
+  Trash2,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { supabase } from '../lib/supabaseClient';
 import { ProspectRegistrationItem, ProspectAnalyticsResponse } from '../types';
+import { HonestErrorBanner, HonestErrorInfo } from '../components/HonestErrorBanner';
 
 export const ProspectManagementScreen: React.FC = () => {
   const [prospects, setProspects] = useState<ProspectRegistrationItem[]>([]);
   const [analytics, setAnalytics] = useState<ProspectAnalyticsResponse | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [backendError, setBackendError] = useState<HonestErrorInfo | null>(null);
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterInterest, setFilterInterest] = useState<string>('ALL');
@@ -34,6 +37,7 @@ export const ProspectManagementScreen: React.FC = () => {
 
   const fetchData = async () => {
     setIsLoading(true);
+    setBackendError(null);
     try {
       const [list, stats] = await Promise.all([
         api.getProspectRegistrations(),
@@ -42,6 +46,12 @@ export const ProspectManagementScreen: React.FC = () => {
       setProspects(list);
       setAnalytics(stats);
     } catch (err: any) {
+      setBackendError({
+        endpoint: '/admin/prospect-registrations',
+        status: err?.status || 500,
+        message: err?.message || 'Gagal memuat data prospek pendaftar.',
+        rawDetails: err?.rawDetails || err,
+      });
       setMessage({ type: 'error', text: err?.message || 'Gagal memuat data prospek pendaftar.' });
     } finally {
       setIsLoading(false);
@@ -121,6 +131,25 @@ export const ProspectManagementScreen: React.FC = () => {
     }
   };
 
+  const handleDeleteProspect = async (id: string, name: string) => {
+    if (!window.confirm(`Yakin ingin menghapus pendaftaran prospek "${name}"?`)) return;
+    setProcessingId(id);
+    try {
+      await api.deleteProspectRegistration(id);
+      setMessage({ type: 'success', text: `Pendaftaran prospek "${name}" berhasil dihapus.` });
+      fetchData();
+    } catch (err: any) {
+      setBackendError({
+        endpoint: `/admin/prospect-registrations/${id}`,
+        status: err?.status || 500,
+        message: err?.message || 'Gagal menghapus pendaftaran prospek.',
+        rawDetails: err?.rawDetails || err,
+      });
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   const filteredProspects = prospects.filter((p) => {
     const matchesSearch =
       !searchQuery ||
@@ -152,6 +181,9 @@ export const ProspectManagementScreen: React.FC = () => {
           <span>Segarkan Data</span>
         </button>
       </div>
+
+      {/* Honest Backend Error Banner */}
+      <HonestErrorBanner error={backendError} onRetry={fetchData} isRetrying={isLoading} />
 
       {message && (
         <div
@@ -306,6 +338,14 @@ export const ProspectManagementScreen: React.FC = () => {
                           Jadwalkan Demo
                         </button>
                       )}
+                      <button
+                        onClick={() => handleDeleteProspect(p.id, p.fullName || p.companyName)}
+                        disabled={processingId === p.id}
+                        className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition inline-flex items-center"
+                        title="Hapus / Tolak Pendaftaran Prospek"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </td>
                   </tr>
                 ))

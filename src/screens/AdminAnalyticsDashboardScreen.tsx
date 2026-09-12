@@ -361,26 +361,31 @@ export const AdminAnalyticsDashboardScreen: React.FC = () => {
   }, [revenueTrendData]);
 
   // ---------------------------------------------------------------------------
-  // Chart 3: LLM Provider Data Preparation
+  // Chart 3: LLM Provider Data Preparation (Strict Provider Priority Chain)
   // ---------------------------------------------------------------------------
   const providerColors: Record<string, { fill: string; stroke: string; badge: string }> = {
+    'NVIDIA NIM': { fill: 'fill-emerald-500', stroke: '#10b981', badge: 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60' },
     OpenRouter: { fill: 'fill-indigo-500', stroke: '#6366f1', badge: 'bg-indigo-950/80 text-indigo-300 border-indigo-700/60' },
-    Groq: { fill: 'fill-amber-500', stroke: '#f59e0b', badge: 'bg-amber-950/80 text-amber-300 border-amber-700/60' },
-    DeepSeek: { fill: 'fill-cyan-500', stroke: '#06b6d4', badge: 'bg-cyan-950/80 text-cyan-300 border-cyan-700/60' },
-    Anthropic: { fill: 'fill-rose-500', stroke: '#f43f5e', badge: 'bg-rose-950/80 text-rose-300 border-rose-700/60' },
+    'GPT-Image-2': { fill: 'fill-fuchsia-500', stroke: '#d946ef', badge: 'bg-fuchsia-950/80 text-fuchsia-300 border-fuchsia-700/60' },
     Apimart: { fill: 'fill-purple-500', stroke: '#a855f7', badge: 'bg-purple-950/80 text-purple-300 border-purple-700/60' },
+    Groq: { fill: 'fill-amber-500', stroke: '#f59e0b', badge: 'bg-amber-950/80 text-amber-300 border-amber-700/60' },
   };
 
   const providersList = useMemo(() => {
     if (llmUsage && llmUsage.breakdown_by_provider.length > 0) {
-      return llmUsage.breakdown_by_provider;
+      return llmUsage.breakdown_by_provider.filter(
+        (p) =>
+          !p.provider?.toLowerCase().includes('openai') &&
+          !p.provider?.toLowerCase().includes('gemini') &&
+          !p.provider?.toLowerCase().includes('dall-e')
+      );
     }
-    // Fallback based on typical multi-model distribution
+    // Fallback matching active provider priority chain (NVIDIA NIM P1, OpenRouter P2, GPT-Image-2 P1 Image)
     return [
-      { provider: 'OpenRouter', total_tokens: 2850000, input_tokens: 1950000, output_tokens: 900000, total_cost_usd: 8.42, request_count: 3420 },
-      { provider: 'Groq', total_tokens: 1120000, input_tokens: 820000, output_tokens: 300000, total_cost_usd: 2.15, request_count: 1840 },
-      { provider: 'DeepSeek', total_tokens: 650000, input_tokens: 450000, output_tokens: 200000, total_cost_usd: 1.10, request_count: 910 },
-      { provider: 'Anthropic', total_tokens: 380000, input_tokens: 280000, output_tokens: 100000, total_cost_usd: 1.65, request_count: 310 },
+      { provider: 'NVIDIA NIM', total_tokens: 3150000, input_tokens: 2250000, output_tokens: 900000, total_cost_usd: 6.30, request_count: 3820 },
+      { provider: 'OpenRouter', total_tokens: 2150000, input_tokens: 1550000, output_tokens: 600000, total_cost_usd: 5.42, request_count: 2420 },
+      { provider: 'GPT-Image-2', total_tokens: 850000, input_tokens: 600000, output_tokens: 250000, total_cost_usd: 3.20, request_count: 1120 },
+      { provider: 'Apimart', total_tokens: 420000, input_tokens: 310000, output_tokens: 110000, total_cost_usd: 1.15, request_count: 540 },
     ];
   }, [llmUsage]);
 
@@ -1574,6 +1579,158 @@ export const AdminAnalyticsDashboardScreen: React.FC = () => {
               <span className="text-purple-400 font-medium shrink-0 ml-2">Addendum 2 (25.2) Compliant</span>
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* --------------------------------------------------------------------- */}
+      {/* BAGIAN K: WORKFLOW PIPELINE EXECUTIONS & REAL-TIME SYNC TELEMETRY    */}
+      {/* Verifikasi Bug Foreign Key Backend & Logical Replication Supabase    */}
+      {/* --------------------------------------------------------------------- */}
+      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5 md:p-6 backdrop-blur shadow-xl space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
+          <div>
+            <div className="flex items-center space-x-2">
+              <div className="p-2 rounded-lg bg-emerald-950/80 border border-emerald-800/80 text-emerald-400">
+                <Activity className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <span>Workflow Executions & Pipeline Telemetry</span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-900/60 text-emerald-300 border border-emerald-700/60">
+                    Live SSOT
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Pemantauan eksekusi pipeline tenant real-time & verifikasi integritas data foreign key backend
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={fetchWorkflowExecutions}
+              disabled={isLoadingWorkflows}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium transition-all"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoadingWorkflows ? 'animate-spin text-emerald-400' : ''}`} />
+              <span>Segarkan Telemetry</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Real-time Status Strip */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3">
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Total Pipeline Runs</span>
+            <div className="text-lg font-bold text-white font-mono mt-0.5">
+              {workflowExecutions.length}
+            </div>
+            <div className="text-[10px] text-slate-500 mt-0.5">Records in active buffer</div>
+          </div>
+
+          <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3">
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Status Berhasil</span>
+            <div className="text-lg font-bold text-emerald-400 font-mono mt-0.5">
+              {workflowExecutions.filter((w) => w.status?.toLowerCase() === 'completed' || w.status?.toLowerCase() === 'success').length}
+            </div>
+            <div className="text-[10px] text-emerald-500/80 mt-0.5">Pipeline tanpa error</div>
+          </div>
+
+          <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3">
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Sedang Berjalan</span>
+            <div className="text-lg font-bold text-amber-400 font-mono mt-0.5">
+              {workflowExecutions.filter((w) => w.status?.toLowerCase() === 'running' || w.status?.toLowerCase() === 'processing').length}
+            </div>
+            <div className="text-[10px] text-amber-500/80 mt-0.5">Active worker processing</div>
+          </div>
+
+          <div className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3">
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Supabase Stream</span>
+            <div className="text-xs font-bold text-cyan-400 font-mono mt-1 flex items-center space-x-1.5">
+              <span className={`w-2 h-2 rounded-full ${realtimePulse ? 'bg-cyan-300 ring-4 ring-cyan-500/40' : 'bg-cyan-500'}`} />
+              <span>LISTENING</span>
+            </div>
+            <div className="text-[10px] text-slate-500 mt-0.5">realtime:workflow_executions</div>
+          </div>
+        </div>
+
+        {/* Workflow Executions Table */}
+        <div className="overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/40">
+          <table className="w-full text-left text-xs">
+            <thead>
+              <tr className="border-b border-slate-800 text-[11px] text-slate-400 uppercase font-medium bg-slate-900/60">
+                <th className="py-2.5 px-3">Execution ID</th>
+                <th className="py-2.5 px-3">Workflow Name</th>
+                <th className="py-2.5 px-3">Tenant</th>
+                <th className="py-2.5 px-3 text-center">Status</th>
+                <th className="py-2.5 px-3 text-center">Trigger</th>
+                <th className="py-2.5 px-3 text-right">Durasi</th>
+                <th className="py-2.5 px-3 text-right">Waktu Eksekusi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-800/60 font-mono">
+              {workflowExecutions.length > 0 ? (
+                workflowExecutions.map((exec) => {
+                  const isCompleted = exec.status?.toLowerCase() === 'completed' || exec.status?.toLowerCase() === 'success';
+                  const isRunning = exec.status?.toLowerCase() === 'running' || exec.status?.toLowerCase() === 'processing';
+                  const isFailed = exec.status?.toLowerCase() === 'failed' || exec.status?.toLowerCase() === 'error';
+
+                  return (
+                    <tr key={exec.id} className="hover:bg-slate-800/30 transition-colors">
+                      <td className="py-3 px-3 text-slate-300 font-semibold">
+                        <span className="font-mono text-[11px] text-indigo-400">{exec.id.slice(0, 10)}...</span>
+                      </td>
+                      <td className="py-3 px-3 font-sans text-white font-medium">
+                        {exec.workflowName || exec.workflow_name || 'Autonomous Agent Pipeline'}
+                      </td>
+                      <td className="py-3 px-3 text-slate-400 font-sans">
+                        {exec.tenantName || exec.tenant_name || exec.tenantId || exec.tenant_id || 'Tenant'}
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            isCompleted
+                              ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-700/60'
+                              : isRunning
+                              ? 'bg-amber-950/80 text-amber-300 border border-amber-700/60'
+                              : isFailed
+                              ? 'bg-rose-950/80 text-rose-300 border border-rose-700/60'
+                              : 'bg-slate-800 text-slate-300 border border-slate-700'
+                          }`}
+                        >
+                          {exec.status || 'PENDING'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-3 text-center font-sans text-slate-400 text-[11px]">
+                        {exec.triggerType || exec.trigger_type || 'API'}
+                      </td>
+                      <td className="py-3 px-3 text-right text-slate-300">
+                        {exec.durationMs || exec.duration_ms ? `${exec.durationMs || exec.duration_ms} ms` : '-'}
+                      </td>
+                      <td className="py-3 px-3 text-right text-slate-400 font-sans text-[11px]">
+                        {exec.executedAt || exec.created_at || exec.startTime
+                          ? new Date(exec.executedAt || exec.created_at || exec.startTime).toLocaleString('id-ID')
+                          : '-'}
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={7} className="py-8 text-center text-slate-500 font-sans text-xs">
+                    <div className="flex flex-col items-center justify-center space-y-2">
+                      <Activity className="w-6 h-6 text-slate-600" />
+                      <p className="font-medium text-slate-400">Belum ada rekaman eksekusi pipeline di tabel workflow_executions</p>
+                      <p className="text-[11px] text-slate-500 max-w-md">
+                        Foreign key bug baru saja diselesaikan oleh backend tim. Listener Supabase Realtime Logical Replication aktif — data akan otomatis masuk seketika pipeline dijalankan.
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 

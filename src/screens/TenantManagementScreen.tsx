@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Plus, Search, RefreshCw, ShieldCheck, UserCheck, AlertTriangle, Clock } from 'lucide-react';
+import { Building2, Plus, Search, RefreshCw, ShieldCheck, UserCheck, AlertTriangle, Clock, Trash2, Edit2, Ban, CheckCircle } from 'lucide-react';
 import { api } from '../lib/api';
 import { TenantItem, SupportImpersonationSession } from '../types';
+import { HonestErrorBanner, HonestErrorInfo } from '../components/HonestErrorBanner';
 
 export const TenantManagementScreen: React.FC = () => {
   const [tenants, setTenants] = useState<TenantItem[]>([]);
@@ -12,6 +13,7 @@ export const TenantManagementScreen: React.FC = () => {
   const [newTenantTier, setNewTenantTier] = useState<string>('starter');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [backendError, setBackendError] = useState<HonestErrorInfo | null>(null);
 
   // Support Impersonation Modal State
   const [impersonateTenant, setImpersonateTenant] = useState<TenantItem | null>(null);
@@ -21,11 +23,18 @@ export const TenantManagementScreen: React.FC = () => {
 
   const fetchTenants = async () => {
     setIsLoading(true);
+    setBackendError(null);
     try {
       const data = await api.getTenants();
       setTenants(data);
       setActiveSession(api.getActiveSupportImpersonation());
     } catch (err: any) {
+      setBackendError({
+        endpoint: '/admin/tenants',
+        status: err?.status || 500,
+        message: err?.message || 'Gagal memuat daftar tenant dari backend.',
+        rawDetails: err?.rawDetails || err,
+      });
       setMessage({ type: 'error', text: err?.message || 'Gagal memuat daftar tenant.' });
     } finally {
       setIsLoading(false);
@@ -53,6 +62,7 @@ export const TenantManagementScreen: React.FC = () => {
     e.preventDefault();
     if (!newTenantName.trim()) return;
     setIsSubmitting(true);
+    setBackendError(null);
     try {
       await api.createTenant({
         name: newTenantName.trim(),
@@ -64,9 +74,47 @@ export const TenantManagementScreen: React.FC = () => {
       setIsModalOpen(false);
       fetchTenants();
     } catch (err: any) {
+      setBackendError({
+        endpoint: '/admin/tenants',
+        status: err?.status || 500,
+        message: err?.message || 'Gagal membuat tenant di backend.',
+        rawDetails: err?.rawDetails || err,
+      });
       setMessage({ type: 'error', text: err?.message || 'Gagal membuat tenant.' });
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleToggleTenantStatus = async (tenant: TenantItem) => {
+    const nextStatus = tenant.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
+    try {
+      await api.updateTenantStatus(tenant.id, nextStatus);
+      setMessage({ type: 'success', text: `Status tenant "${tenant.name}" diubah menjadi ${nextStatus}.` });
+      fetchTenants();
+    } catch (err: any) {
+      setBackendError({
+        endpoint: `/admin/tenants/${tenant.id}/status`,
+        status: err?.status || 500,
+        message: err?.message || 'Gagal memperbarui status tenant.',
+        rawDetails: err?.rawDetails || err,
+      });
+    }
+  };
+
+  const handleDeleteTenant = async (tenant: TenantItem) => {
+    if (!window.confirm(`Yakin ingin menghapus tenant "${tenant.name}"? Tindakan ini permanen.`)) return;
+    try {
+      await api.deleteTenant(tenant.id);
+      setMessage({ type: 'success', text: `Tenant "${tenant.name}" berhasil dihapus.` });
+      fetchTenants();
+    } catch (err: any) {
+      setBackendError({
+        endpoint: `/admin/tenants/${tenant.id}`,
+        status: err?.status || 500,
+        message: err?.message || 'Gagal menghapus tenant.',
+        rawDetails: err?.rawDetails || err,
+      });
     }
   };
 
@@ -137,6 +185,9 @@ export const TenantManagementScreen: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Honest Backend Error Banner */}
+      <HonestErrorBanner error={backendError} onRetry={fetchTenants} isRetrying={isLoading} />
 
       {/* Active Support Impersonation Banner */}
       {activeSession && (
@@ -245,27 +296,49 @@ export const TenantManagementScreen: React.FC = () => {
                         {tenant.userCount ?? 0} Human / {tenant.agentCount ?? 0} AI
                       </td>
                       <td className="px-4 py-3 text-right">
-                        {isCurrentImpersonated ? (
+                        <div className="flex items-center justify-end gap-1.5">
+                          {isCurrentImpersonated ? (
+                            <button
+                              onClick={handleEndSupportMode}
+                              className="px-2.5 py-1 rounded bg-rose-950 hover:bg-rose-900 border border-rose-700 text-rose-300 text-[11px] font-medium transition"
+                            >
+                              Akhiri Support
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setImpersonateTenant(tenant);
+                                setImpersonateReason('');
+                                setImpersonateDuration(15);
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-800 text-indigo-300 text-[11px] font-medium transition"
+                              title="Mode Support (Fase 124 D.4.2)"
+                            >
+                              <ShieldCheck className="w-3 h-3 text-indigo-400" />
+                              <span>Support</span>
+                            </button>
+                          )}
+
                           <button
-                            onClick={handleEndSupportMode}
-                            className="px-2.5 py-1 rounded bg-rose-950 hover:bg-rose-900 border border-rose-700 text-rose-300 text-[11px] font-medium transition"
+                            onClick={() => handleToggleTenantStatus(tenant)}
+                            className={`p-1 rounded border text-[11px] transition ${
+                              tenant.status === 'ACTIVE'
+                                ? 'bg-amber-950/40 hover:bg-amber-900/60 border-amber-800/60 text-amber-300'
+                                : 'bg-emerald-950/40 hover:bg-emerald-900/60 border-emerald-800/60 text-emerald-300'
+                            }`}
+                            title={tenant.status === 'ACTIVE' ? 'Suspend Tenant' : 'Aktifkan Tenant'}
                           >
-                            Akhiri Support
+                            {tenant.status === 'ACTIVE' ? <Ban className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}
                           </button>
-                        ) : (
+
                           <button
-                            onClick={() => {
-                              setImpersonateTenant(tenant);
-                              setImpersonateReason('');
-                              setImpersonateDuration(15);
-                            }}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-indigo-950/80 hover:bg-indigo-900 border border-indigo-800 text-indigo-300 text-[11px] font-medium transition"
-                            title="Masuk Mode Support dengan Time-Boxed Token (Fase 124 Bagian D.4.2)"
+                            onClick={() => handleDeleteTenant(tenant)}
+                            className="p-1 rounded bg-rose-950/40 hover:bg-rose-900/60 border border-rose-800/60 text-rose-400 transition"
+                            title="Hapus Tenant"
                           >
-                            <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
-                            <span>Support Mode</span>
+                            <Trash2 className="w-3.5 h-3.5" />
                           </button>
-                        )}
+                        </div>
                       </td>
                     </tr>
                   );
