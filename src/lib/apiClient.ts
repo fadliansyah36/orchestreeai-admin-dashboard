@@ -56,6 +56,12 @@ export const apiClient = {
       if (stored) return stored;
     }
 
+    // 4. LocalStorage fallback
+    if (typeof localStorage !== 'undefined') {
+      const storedLocal = localStorage.getItem('orchestree_superadmin_token');
+      if (storedLocal) return storedLocal;
+    }
+
     return null;
   },
 

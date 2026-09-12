@@ -184,6 +184,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             } catch {}
           }
         }
+        if (!restoredUser && typeof localStorage !== 'undefined') {
+          const rawLocal = localStorage.getItem('orchestree_superadmin_user');
+          if (rawLocal) {
+            try {
+              restoredUser = JSON.parse(rawLocal);
+            } catch {}
+          }
+        }
 
         if (superAdminToken && (activeCookie === 'active' || restoredUser)) {
           const userObj: AdminUserProfile = restoredUser || {
@@ -621,6 +629,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (typeof sessionStorage !== 'undefined') {
         sessionStorage.setItem('orchestree_superadmin_token', sessionToken);
         sessionStorage.setItem('orchestree_superadmin_user', JSON.stringify(superAdminUser));
+      }
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('orchestree_superadmin_token', sessionToken);
+        localStorage.setItem('orchestree_superadmin_user', JSON.stringify(superAdminUser));
       }
 
       setMfaPending(false);
